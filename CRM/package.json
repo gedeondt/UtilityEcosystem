@@ -1,0 +1,14 @@
+{
+  "name": "crm",
+  "version": "1.0.0",
+  "description": "Aplicación CRM simulada para comercializadora de energía",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js",
+    "start:demo": "node app.js 5"
+  },
+  "keywords": ["crm", "energia", "simulacion"],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs"
+}
