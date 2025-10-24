@@ -1,0 +1,15 @@
+{
+  "name": "datalake-ingest",
+  "version": "1.0.0",
+  "description": "Ingestion scripts for CRM and FTP data sources",
+  "type": "commonjs",
+  "private": true,
+  "scripts": {
+    "start:crm": "node crm_ingest.js",
+    "start:ftp": "node ftp_ingest.js"
+  },
+  "dependencies": {
+    "basic-ftp": "^5.0.2",
+    "node-fetch": "^2.6.11"
+  }
+}
