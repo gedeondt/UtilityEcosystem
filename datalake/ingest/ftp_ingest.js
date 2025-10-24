@@ -65,8 +65,20 @@ async function downloadFromFtp() {
     const listing = await client.list();
 
     console.info(`Retrieved ${listing.length} entries from FTP directory.`);
+    listing.forEach((item) =>
+      console.info('FTP entry metadata:', {
+        name: item.name,
+        type: item.type,
+        isDirectory: item.isDirectory,
+        size: item.size
+      })
+    );
 
-    const downloadableItems = listing.filter((item) => item.type === '-');
+    const downloadableItems = listing.filter((item) => {
+      const isDirectory = item.isDirectory === true || item.type === 'd';
+      const isSymbolicLink = item.type === 'l';
+      return !isDirectory && !isSymbolicLink;
+    });
 
     if (downloadableItems.length === 0) {
       console.info('No downloadable files were found in the FTP directory.');
