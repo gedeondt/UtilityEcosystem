@@ -1,0 +1,13 @@
+{
+  "name": "ftp-simulator",
+  "version": "1.0.0",
+  "description": "Simulador de servidor FTP que genera ficheros p5d a partir de contratos activos del CRM",
+  "main": "app.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node app.js"
+  },
+  "dependencies": {
+    "ftp-srv": "^4.6.3"
+  }
+}
