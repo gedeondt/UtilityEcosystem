@@ -43,6 +43,7 @@ async function downloadFromFtp() {
   client.ftp.verbose = false;
 
   try {
+    console.info(`Connecting to FTP server ${ftpHost}:${ftpPort} as anonymous...`);
     await client.access({
       host: ftpHost,
       port: ftpPort,
@@ -51,19 +52,27 @@ async function downloadFromFtp() {
       secure: false
     });
 
+    console.info('Connection to FTP server established.');
+
     if (ftpRemoteDir && ftpRemoteDir !== DEFAULT_REMOTE_DIR) {
+      console.info(`Changing remote directory to ${ftpRemoteDir}`);
       await client.cd(ftpRemoteDir);
+    } else {
+      console.info('Using FTP root directory.');
     }
 
     await ensureDirectory(outputDir);
     const listing = await client.list();
 
-    for (const item of listing) {
-      if (item.type !== '-') {
-        // Skip directories and special entries.
-        continue;
-      }
+    console.info(`Retrieved ${listing.length} entries from FTP directory.`);
 
+    const downloadableItems = listing.filter((item) => item.type === '-');
+
+    if (downloadableItems.length === 0) {
+      console.info('No downloadable files were found in the FTP directory.');
+    }
+
+    for (const item of downloadableItems) {
       const localPath = path.join(outputDir, item.name);
       const tempPath = `${localPath}.downloading`;
 
@@ -93,7 +102,10 @@ async function downloadFromFtp() {
 async function start() {
   await ensureDirectory(outputDir);
   await downloadFromFtp();
-  setInterval(downloadFromFtp, intervalMs).unref();
+  console.info(
+    `Scheduled recurring FTP ingestion every ${Math.round(intervalMs / 1000)} seconds.`
+  );
+  setInterval(downloadFromFtp, intervalMs);
 }
 
 start().catch((error) => {
