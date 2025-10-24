@@ -8,6 +8,11 @@ const SEED_RATE = (() => {
   return Number.isFinite(arg) && arg > 0 ? Math.floor(arg) : 1;
 })();
 
+const MAX_CLIENTS = (() => {
+  const arg = Number(process.argv[3]);
+  return Number.isFinite(arg) && arg > 0 ? Math.floor(arg) : null;
+})();
+
 const clients = [];
 const billingAccounts = [];
 const supplyPoints = [];
@@ -106,8 +111,18 @@ function createClientBundle() {
 }
 
 function seed(count) {
+  const remainingCapacity =
+    MAX_CLIENTS === null ? count : Math.max(0, MAX_CLIENTS - clients.length);
+
+  if (remainingCapacity <= 0) {
+    console.log('Límite máximo de clientes alcanzado.');
+    return [];
+  }
+
+  const toCreate = Math.min(count, remainingCapacity);
+
   const created = [];
-  for (let i = 0; i < count; i += 1) {
+  for (let i = 0; i < toCreate; i += 1) {
     const bundle = createClientBundle();
     clients.push(bundle.client);
     billingAccounts.push(bundle.billingAccount);
@@ -115,7 +130,7 @@ function seed(count) {
     contracts.push(bundle.contract);
     created.push(bundle.client.id);
   }
-  console.log(`Añadidos ${count} clientes. Total clientes: ${clients.length}`);
+  console.log(`Añadidos ${toCreate} clientes. Total clientes: ${clients.length}`);
   return created;
 }
 
@@ -133,8 +148,27 @@ function notFound(res) {
   res.end(JSON.stringify({ message: 'Recurso no encontrado' }));
 }
 
-function handleGetCollection(res, collection) {
-  sendJson(res, collection);
+function handleGetCollection(res, collection, url) {
+  const pageParam = Number(url.searchParams.get('page'));
+  const perPageParam = Number(url.searchParams.get('perPage'));
+
+  const page = Number.isFinite(pageParam) && pageParam > 0 ? Math.floor(pageParam) : 1;
+  const perPage = Number.isFinite(perPageParam) && perPageParam > 0 ? Math.floor(perPageParam) : 25;
+
+  const totalItems = collection.length;
+  const totalPages = perPage > 0 ? Math.ceil(totalItems / perPage) : 0;
+  const start = (page - 1) * perPage;
+  const paginatedItems = start >= 0 ? collection.slice(start, start + perPage) : [];
+
+  sendJson(res, {
+    data: paginatedItems,
+    pagination: {
+      page,
+      perPage,
+      totalItems,
+      totalPages
+    }
+  });
 }
 
 const server = http.createServer((req, res) => {
@@ -149,16 +183,16 @@ const server = http.createServer((req, res) => {
 
   switch (url.pathname) {
     case '/clients':
-      handleGetCollection(res, clients);
+      handleGetCollection(res, clients, url);
       return;
     case '/billing-accounts':
-      handleGetCollection(res, billingAccounts);
+      handleGetCollection(res, billingAccounts, url);
       return;
     case '/supply-points':
-      handleGetCollection(res, supplyPoints);
+      handleGetCollection(res, supplyPoints, url);
       return;
     case '/contracts':
-      handleGetCollection(res, contracts);
+      handleGetCollection(res, contracts, url);
       return;
     default:
       notFound(res);
@@ -168,6 +202,22 @@ const server = http.createServer((req, res) => {
 server.listen(PORT, () => {
   console.log(`CRM escuchando en http://localhost:${PORT}`);
   console.log(`Sembrando ${SEED_RATE} cliente(s) cada ${SEED_INTERVAL_MS / 1000} segundos...`);
+  if (MAX_CLIENTS !== null) {
+    console.log(`Límite máximo de clientes configurado en ${MAX_CLIENTS}.`);
+  }
+
   seed(SEED_RATE);
-  setInterval(() => seed(SEED_RATE), SEED_INTERVAL_MS);
+
+  if (MAX_CLIENTS !== null && clients.length >= MAX_CLIENTS) {
+    console.log('Generación automática deshabilitada: límite máximo alcanzado tras la inicialización.');
+    return;
+  }
+
+  const interval = setInterval(() => {
+    seed(SEED_RATE);
+    if (MAX_CLIENTS !== null && clients.length >= MAX_CLIENTS) {
+      clearInterval(interval);
+      console.log('Deteniendo generación automática: límite máximo alcanzado.');
+    }
+  }, SEED_INTERVAL_MS);
 });
