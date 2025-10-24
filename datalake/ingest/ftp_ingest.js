@@ -3,31 +3,33 @@ const fs = require('fs');
 const path = require('path');
 
 const DEFAULT_INTERVAL_MS = 3 * 60 * 1000;
+const DEFAULT_FTP_PORT = 2121;
+const DEFAULT_REMOTE_DIR = '/';
 
-const ftpHost = process.env.FTP_HOST || process.argv[2];
-const ftpPort = Number(process.env.FTP_PORT || process.argv[3] || 21);
-const ftpUser = process.env.FTP_USER || process.argv[4] || 'anonymous';
-const ftpPassword = process.env.FTP_PASSWORD || process.argv[5] || 'guest';
-const ftpRemoteDir = process.env.FTP_REMOTE_DIR || process.argv[6] || '/';
-const ftpSecure = process.env.FTP_SECURE || process.argv[7] || 'false';
-const outputDir = process.env.FTP_OUTPUT_DIR || process.argv[8] || path.resolve(__dirname, '..', 'data', 'landing', 'ftp');
-const intervalMs = Number(process.env.FTP_POLL_INTERVAL_MS || process.argv[9] || DEFAULT_INTERVAL_MS);
+const [, , cliHost, cliOutputDir, cliInterval] = process.argv;
+
+const ftpHost = process.env.FTP_HOST || cliHost;
+const ftpPortValue = process.env.FTP_PORT;
+const ftpPort = ftpPortValue ? Number(ftpPortValue) : DEFAULT_FTP_PORT;
+const ftpRemoteDir = process.env.FTP_REMOTE_DIR || DEFAULT_REMOTE_DIR;
+const outputDir = process.env.FTP_OUTPUT_DIR || cliOutputDir || path.resolve(__dirname, '..', 'data', 'landing', 'ftp');
+
+const configuredInterval = process.env.FTP_POLL_INTERVAL_MS || cliInterval;
+const intervalMs = configuredInterval ? Number(configuredInterval) : DEFAULT_INTERVAL_MS;
 
 if (!ftpHost) {
   console.error('FTP host must be provided via FTP_HOST env var or first CLI argument.');
   process.exit(1);
 }
 
-if (!Number.isFinite(intervalMs) || intervalMs <= 0) {
-  console.error('Polling interval must be a positive number of milliseconds.');
+if (!Number.isInteger(ftpPort) || ftpPort <= 0) {
+  console.error('FTP port must be a positive integer.');
   process.exit(1);
 }
 
-function resolveSecureFlag(value) {
-  const normalized = String(value || '').toLowerCase();
-  if (normalized === 'true') return true;
-  if (normalized === 'implicit') return 'implicit';
-  return false;
+if (!Number.isFinite(intervalMs) || intervalMs <= 0) {
+  console.error('Polling interval must be a positive number of milliseconds.');
+  process.exit(1);
 }
 
 async function ensureDirectory(directoryPath) {
@@ -44,12 +46,12 @@ async function downloadFromFtp() {
     await client.access({
       host: ftpHost,
       port: ftpPort,
-      user: ftpUser,
-      password: ftpPassword,
-      secure: resolveSecureFlag(ftpSecure)
+      user: 'anonymous',
+      password: 'anonymous@',
+      secure: false
     });
 
-    if (ftpRemoteDir && ftpRemoteDir !== '/') {
+    if (ftpRemoteDir && ftpRemoteDir !== DEFAULT_REMOTE_DIR) {
       await client.cd(ftpRemoteDir);
     }
 
