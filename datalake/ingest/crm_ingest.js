@@ -138,7 +138,7 @@ async function start() {
   await ensureDirectory(outputDir);
   console.info(`Configured ${CRM_ENDPOINTS.length} CRM endpoint(s).`);
   await fetchCrmData(CRM_ENDPOINTS);
-  setInterval(() => fetchCrmData(CRM_ENDPOINTS), intervalMs).unref();
+  setInterval(() => fetchCrmData(CRM_ENDPOINTS), intervalMs);
 }
 
 start().catch((error) => {
