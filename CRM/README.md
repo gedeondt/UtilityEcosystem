@@ -15,17 +15,110 @@ La aplicación expone un servidor HTTP en el puerto `3000` (configurable mediant
 
 ## Endpoints disponibles
 
-- `GET /clients`
-- `GET /billing-accounts`
-- `GET /supply-points`
-- `GET /contracts`
+Todos los recursos son de solo lectura y devuelven colecciones paginadas.
 
-Todos los recursos aceptan paginación mediante parámetros de consulta:
+### Parámetros de paginación
 
 - `page`: página a devolver (1 por defecto).
 - `perPage`: número de elementos por página (25 por defecto).
 
-La respuesta incluye la porción de datos solicitada en la propiedad `data`, además de un objeto `pagination` con `page`, `perPage`, `totalItems` y `totalPages`.
+Las respuestas tienen la forma:
+
+```json
+{
+  "data": [ /* elementos de la colección */ ],
+  "pagination": {
+    "page": 1,
+    "perPage": 25,
+    "totalItems": 125,
+    "totalPages": 5
+  }
+}
+```
+
+### `GET /clients`
+
+Devuelve clientes con sus datos personales y de contacto.
+
+```json
+{
+  "id": "uuid",
+  "fullName": "Nombre Apellido",
+  "documentId": "X1234567Y",
+  "email": "nombre.apellido@ejemplo.com",
+  "phone": "+34600000000",
+  "address": {
+    "street": "Gran Vía 123",
+    "city": "Madrid",
+    "postalCode": "28001",
+    "country": "España"
+  },
+  "createdAt": "2024-01-01T10:00:00.000Z"
+}
+```
+
+### `GET /billing-accounts`
+
+Devuelve las cuentas de facturación asociadas a los clientes.
+
+```json
+{
+  "id": "uuid",
+  "clientId": "uuid del cliente",
+  "iban": "ES0012345678901234567890",
+  "billingAddress": {
+    "street": "Gran Vía 123",
+    "city": "Madrid",
+    "postalCode": "28001",
+    "country": "España"
+  },
+  "paymentMethod": "Domiciliación bancaria",
+  "status": "ACTIVA",
+  "createdAt": "2024-01-01T10:00:00.000Z"
+}
+```
+
+### `GET /supply-points`
+
+Devuelve los puntos de suministro vinculados a los clientes.
+
+```json
+{
+  "id": "uuid",
+  "clientId": "uuid del cliente",
+  "cups": "ES00123456789012345678",
+  "address": {
+    "street": "Gran Vía 123",
+    "city": "Madrid",
+    "postalCode": "28001",
+    "country": "España"
+  },
+  "supplyType": "Electricidad",
+  "distributor": "Distribuidora Nacional",
+  "contractedPowerKw": 5.5,
+  "createdAt": "2024-01-01T10:00:00.000Z"
+}
+```
+
+### `GET /contracts`
+
+Devuelve los contratos que relacionan clientes, cuentas de facturación y puntos de suministro.
+
+```json
+{
+  "id": "uuid",
+  "clientId": "uuid del cliente",
+  "billingAccountId": "uuid de la cuenta",
+  "supplyPointId": "uuid del punto",
+  "tariff": "Tarifa Plana 24h",
+  "status": "VIGENTE",
+  "pricePerKWh": 0.1345,
+  "fixedFeeEurMonth": 12.34,
+  "startDate": "2024-01-01T10:00:00.000Z",
+  "endDate": "2025-01-01T10:00:00.000Z",
+  "renewalType": "Renovación automática anual"
+}
+```
 
 ## Datos generados
 
