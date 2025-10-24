@@ -3,9 +3,16 @@ const fs = require('fs');
 const path = require('path');
 
 const DEFAULT_INTERVAL_MS = 3 * 60 * 1000;
+const CRM_ENDPOINTS = Object.freeze([
+  '/clients',
+  '/billing-accounts',
+  '/supply-points',
+  '/contracts'
+]);
 
 const serviceUrl = process.env.CRM_SERVICE_URL || process.argv[2];
-const outputDir = process.env.CRM_OUTPUT_DIR || process.argv[3] || path.resolve(__dirname, '..', 'data', 'landing', 'crm');
+const outputDir =
+  process.env.CRM_OUTPUT_DIR || process.argv[3] || path.resolve(__dirname, '..', 'data', 'landing', 'crm');
 const intervalMs = Number(process.env.CRM_POLL_INTERVAL_MS || process.argv[4] || DEFAULT_INTERVAL_MS);
 
 if (!serviceUrl) {
@@ -22,44 +29,116 @@ async function ensureDirectory(directoryPath) {
   await fs.promises.mkdir(directoryPath, { recursive: true });
 }
 
-async function fetchCrmData() {
+function sanitiseEndpointName(endpointPath) {
+  return endpointPath
+    .replace(/^\/+/, '')
+    .replace(/\/+/g, '-')
+    .replace(/[^a-z0-9-]/gi, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '') || 'root';
+}
+
+function buildEndpointUrl(baseUrl, endpointPath, pageNumber) {
+  const normalisedBase = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
+  const endpointUrl = new URL(endpointPath.replace(/^\/+/, ''), normalisedBase);
+  if (pageNumber !== undefined) {
+    endpointUrl.searchParams.set('page', String(pageNumber));
+  }
+  return endpointUrl.toString();
+}
+
+async function fetchEndpointPage(endpointPath, pageNumber) {
+  const url = buildEndpointUrl(serviceUrl, endpointPath, pageNumber);
+  const response = await fetch(url);
+
+  if (!response.ok) {
+    throw new Error(`Request to ${url} failed with status ${response.status} ${response.statusText}`);
+  }
+
+  return response.json();
+}
+
+async function fetchAllEndpointData(endpointPath) {
+  const aggregatedData = [];
+  let currentPage = 1;
+  let lastPagination = null;
+
+  while (true) {
+    const pagePayload = await fetchEndpointPage(endpointPath, currentPage);
+    const { data = [], pagination = {} } = pagePayload;
+
+    aggregatedData.push(...data);
+    lastPagination = pagination;
+
+    const { totalPages, page = currentPage, perPage } = pagination;
+    const hasMorePages = Number.isFinite(totalPages)
+      ? page < totalPages
+      : data.length > 0 && Number.isFinite(perPage) && data.length === perPage;
+
+    if (!hasMorePages) {
+      break;
+    }
+
+    currentPage += 1;
+  }
+
+  return {
+    data: aggregatedData,
+    pagination: {
+      totalItems: lastPagination && Number.isFinite(lastPagination.totalItems)
+        ? lastPagination.totalItems
+        : aggregatedData.length,
+      totalPages: lastPagination && Number.isFinite(lastPagination.totalPages)
+        ? lastPagination.totalPages
+        : currentPage,
+      perPage: lastPagination && Number.isFinite(lastPagination.perPage)
+        ? lastPagination.perPage
+        : aggregatedData.length > 0
+        ? Math.ceil(aggregatedData.length / currentPage)
+        : 0,
+      fetchedPages: currentPage
+    }
+  };
+}
+
+async function persistEndpointData(endpointPath, payload, timestamp) {
+  const endpointName = sanitiseEndpointName(endpointPath);
+  const entityDir = path.join(outputDir, endpointName);
+  await ensureDirectory(entityDir);
+
+  const filePath = path.join(entityDir, `${endpointName}-${timestamp}.json`);
+  const filePayload = {
+    fetchedAt: timestamp,
+    endpoint: endpointPath,
+    serviceUrl,
+    pagination: payload.pagination,
+    data: payload.data
+  };
+
+  await fs.promises.writeFile(filePath, JSON.stringify(filePayload, null, 2), 'utf8');
+  console.info(`CRM data for ${endpointPath} persisted to ${filePath}`);
+}
+
+async function fetchCrmData(endpoints) {
   const runStartedAt = new Date();
+  const timestamp = runStartedAt.toISOString().replace(/[.:]/g, '-');
   console.info(`Starting CRM ingestion cycle at ${runStartedAt.toISOString()}...`);
 
-  try {
-    const response = await fetch(serviceUrl);
-
-    if (!response.ok) {
-      throw new Error(`CRM request failed with status ${response.status} ${response.statusText}`);
-    }
-
-    const rawBody = await response.text();
-    let bodyToPersist = rawBody;
-
+  for (const endpointPath of endpoints) {
     try {
-      const parsed = JSON.parse(rawBody);
-      bodyToPersist = JSON.stringify(parsed, null, 2);
-    } catch (parseError) {
-      console.warn('CRM response is not valid JSON. Persisting raw payload.');
+      const payload = await fetchAllEndpointData(endpointPath);
+      await persistEndpointData(endpointPath, payload, timestamp);
+    } catch (error) {
+      console.error(`Failed to ingest data for ${endpointPath}:`, error);
     }
-
-    await ensureDirectory(outputDir);
-
-    const timestamp = runStartedAt.toISOString().replace(/[.:]/g, '-');
-    const filePath = path.join(outputDir, `crm-${timestamp}.json`);
-
-    await fs.promises.writeFile(filePath, bodyToPersist, 'utf8');
-
-    console.info(`CRM payload persisted to ${filePath}`);
-  } catch (error) {
-    console.error('CRM ingestion cycle failed:', error);
   }
 }
 
 async function start() {
   await ensureDirectory(outputDir);
-  await fetchCrmData();
-  setInterval(fetchCrmData, intervalMs).unref();
+  console.info(`Configured ${CRM_ENDPOINTS.length} CRM endpoint(s).`);
+  await fetchCrmData(CRM_ENDPOINTS);
+  setInterval(() => fetchCrmData(CRM_ENDPOINTS), intervalMs).unref();
 }
 
 start().catch((error) => {
