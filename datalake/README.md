@@ -10,6 +10,7 @@ Este módulo define la estructura básica del datalake y los procesos de ingesta
     - `crm/`: almacena los ficheros JSON recibidos del servicio CRM.
     - `ftp/`: almacena los ficheros descargados desde el servidor FTP.
 - `ingest/`: scripts Node.js que ejecutan los procesos de ingesta.
+- `transform/`: scripts Node.js encargados de elevar los datos desde *landing* hasta la capa *silver*.
 
 ## Ejecución de los procesos
 

@@ -1,0 +1,13 @@
+{
+  "name": "datalake-transform",
+  "version": "1.0.0",
+  "description": "Scripts de transformación del datalake",
+  "type": "commonjs",
+  "private": true,
+  "scripts": {
+    "start:p5d": "node p5d_to_parquet.js"
+  },
+  "dependencies": {
+    "parquetjs-lite": "^0.21.0"
+  }
+}
