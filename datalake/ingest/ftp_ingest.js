@@ -16,6 +16,13 @@ const outputDir = process.env.FTP_OUTPUT_DIR || cliOutputDir || path.resolve(__d
 const configuredInterval = process.env.FTP_POLL_INTERVAL_MS || cliInterval;
 const intervalMs = configuredInterval ? Number(configuredInterval) : DEFAULT_INTERVAL_MS;
 
+const isVerbose = process.env.TE_VERBOSE === 'true';
+const verboseInfo = (...args) => {
+  if (isVerbose) {
+    console.info(...args);
+  }
+};
+
 if (!ftpHost) {
   console.error('FTP host must be provided via FTP_HOST env var or first CLI argument.');
   process.exit(1);
@@ -67,7 +74,7 @@ async function downloadFromFtp(outputDir) {
   client.ftp.verbose = false;
 
   try {
-    console.info(`Connecting to FTP server ${ftpHost}:${ftpPort} as anonymous...`);
+    verboseInfo(`Connecting to FTP server ${ftpHost}:${ftpPort} as anonymous...`);
     await client.access({
       host: ftpHost,
       port: ftpPort,
@@ -76,27 +83,29 @@ async function downloadFromFtp(outputDir) {
       secure: false
     });
 
-    console.info('Connection to FTP server established.');
+    verboseInfo('Connection to FTP server established.');
 
     if (ftpRemoteDir && ftpRemoteDir !== DEFAULT_REMOTE_DIR) {
-      console.info(`Changing remote directory to ${ftpRemoteDir}`);
+      verboseInfo(`Changing remote directory to ${ftpRemoteDir}`);
       await client.cd(ftpRemoteDir);
     } else {
-      console.info('Using FTP root directory.');
+      verboseInfo('Using FTP root directory.');
     }
 
     await ensureDirectory(runOutputDir);
     const listing = await client.list();
 
-    console.info(`Retrieved ${listing.length} entries from FTP directory.`);
-    listing.forEach((item) =>
-      console.info('FTP entry metadata:', {
-        name: item.name,
-        type: item.type,
-        isDirectory: item.isDirectory,
-        size: item.size
-      })
-    );
+    verboseInfo(`Retrieved ${listing.length} entries from FTP directory.`);
+    if (isVerbose) {
+      listing.forEach((item) =>
+        console.info('FTP entry metadata:', {
+          name: item.name,
+          type: item.type,
+          isDirectory: item.isDirectory,
+          size: item.size
+        })
+      );
+    }
 
     const downloadableItems = listing.filter((item) => {
       const isDirectory = item.isDirectory === true || item.type === 'd';
@@ -105,7 +114,7 @@ async function downloadFromFtp(outputDir) {
     });
 
     if (downloadableItems.length === 0) {
-      console.info('No downloadable files were found in the FTP directory.');
+      verboseInfo('No downloadable files were found in the FTP directory.');
     }
 
     for (const item of downloadableItems) {
@@ -116,7 +125,7 @@ async function downloadFromFtp(outputDir) {
         await client.downloadTo(tempPath, item.name);
         await fs.promises.rename(tempPath, localPath);
         await client.remove(item.name);
-        console.info(`FTP file ${item.name} downloaded to ${localPath} and removed from server.`);
+        verboseInfo(`FTP file ${item.name} downloaded to ${localPath} and removed from server.`);
       } catch (error) {
         console.error(`Failed to download FTP file ${item.name}:`, error);
         try {
@@ -138,7 +147,7 @@ async function downloadFromFtp(outputDir) {
 async function start(outputDir) {
   await ensureDirectory(outputDir);
   await downloadFromFtp(outputDir);
-  console.info(
+  verboseInfo(
     `Scheduled recurring FTP ingestion every ${Math.round(intervalMs / 1000)} seconds.`
   );
   setInterval(downloadFromFtp, intervalMs);

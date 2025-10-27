@@ -15,6 +15,13 @@ const outputDir =
   process.env.CRM_OUTPUT_DIR || process.argv[3] || path.resolve(__dirname, '..', 'data', 'landing', 'crm');
 const intervalMs = Number(process.env.CRM_POLL_INTERVAL_MS || process.argv[4] || DEFAULT_INTERVAL_MS);
 
+const isVerbose = process.env.TE_VERBOSE === 'true';
+const verboseInfo = (...args) => {
+  if (isVerbose) {
+    console.info(...args);
+  }
+};
+
 if (!serviceUrl) {
   console.error('CRM service URL must be provided via CRM_SERVICE_URL env var or first CLI argument.');
   process.exit(1);
@@ -116,7 +123,7 @@ async function persistEndpointData(endpointPath, payload, timestamp) {
   };
 
   await fs.promises.writeFile(filePath, JSON.stringify(filePayload, null, 2), 'utf8');
-  console.info(`CRM data for ${endpointPath} persisted to ${filePath}`);
+  verboseInfo(`CRM data for ${endpointPath} persisted to ${filePath}`);
 }
 
 async function fetchCrmData(endpoints) {
@@ -136,7 +143,7 @@ async function fetchCrmData(endpoints) {
 
 async function start() {
   await ensureDirectory(outputDir);
-  console.info(`Configured ${CRM_ENDPOINTS.length} CRM endpoint(s).`);
+  verboseInfo(`Configured ${CRM_ENDPOINTS.length} CRM endpoint(s).`);
   await fetchCrmData(CRM_ENDPOINTS);
   setInterval(() => fetchCrmData(CRM_ENDPOINTS), intervalMs);
 }

@@ -8,6 +8,13 @@ const DEFAULT_OUTPUT_DIR = path.resolve(__dirname, '..', 'data', 'silver', 'p5d'
 const DEFAULT_OUTPUT_FILE = path.join(DEFAULT_OUTPUT_DIR, 'p5d_readings.parquet');
 const STATE_FILE = path.resolve(__dirname, '.p5d_transform_state.json');
 
+const isVerbose = process.env.TE_VERBOSE === 'true';
+const verboseInfo = (...args) => {
+  if (isVerbose) {
+    console.info(...args);
+  }
+};
+
 function parseCliArgs(argv) {
   const options = {
     inputDir: DEFAULT_INPUT_DIR,
@@ -182,11 +189,11 @@ async function processCycle({ inputDir, outputFile, processedFiles, schema }) {
   const newFiles = candidates.filter((file) => !processedFiles.has(file));
 
   if (newFiles.length === 0) {
-    console.info('No se encontraron nuevos ficheros P5D.');
+    verboseInfo('No se encontraron nuevos ficheros P5D.');
     return;
   }
 
-  console.info(`Procesando ${newFiles.length} fichero(s) P5D...`);
+  verboseInfo(`Procesando ${newFiles.length} fichero(s) P5D...`);
   const buffer = [];
 
   for (const filePath of newFiles) {
@@ -195,7 +202,7 @@ async function processCycle({ inputDir, outputFile, processedFiles, schema }) {
       const records = parseP5DFile(content, filePath);
       buffer.push(...records);
       processedFiles.add(filePath);
-      console.info(`Fichero ${filePath} convertido a ${records.length} registros.`);
+      verboseInfo(`Fichero ${filePath} convertido a ${records.length} registros.`);
     } catch (error) {
       console.error(`No se pudo transformar el fichero ${filePath}:`, error.message);
     }
@@ -205,7 +212,7 @@ async function processCycle({ inputDir, outputFile, processedFiles, schema }) {
   await persistState(processedFiles);
 
   if (buffer.length > 0) {
-    console.info(`Se añadieron ${buffer.length} registros al dataset ${outputFile}.`);
+    verboseInfo(`Se añadieron ${buffer.length} registros al dataset ${outputFile}.`);
   }
 }
 
@@ -222,9 +229,9 @@ async function main() {
   const processedFiles = await loadState();
 
   console.info('Iniciando transformación P5D → Parquet...');
-  console.info(`Directorio de entrada: ${options.inputDir}`);
-  console.info(`Fichero de salida: ${options.outputFile}`);
-  console.info(`Intervalo de sondeo: ${Math.round(options.intervalMs / 1000)} segundos.`);
+  verboseInfo(`Directorio de entrada: ${options.inputDir}`);
+  verboseInfo(`Fichero de salida: ${options.outputFile}`);
+  verboseInfo(`Intervalo de sondeo: ${Math.round(options.intervalMs / 1000)} segundos.`);
 
   const executeCycle = () => {
     processCycle({

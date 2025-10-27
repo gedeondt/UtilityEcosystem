@@ -9,6 +9,8 @@ const rootDir = __dirname;
 
 const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 
+const defaultVerbose = process.env.TE_VERBOSE === 'true' ? 'true' : 'false';
+
 const services = [
   {
     name: 'CRM',
@@ -133,7 +135,7 @@ async function startService(service) {
     log(`Iniciando ${name} (${command} ${args.join(' ')})...`);
     const child = spawn(command, args, {
       cwd,
-      env: { ...process.env, ...env },
+      env: { ...process.env, TE_VERBOSE: defaultVerbose, ...env },
       stdio: ['inherit', 'pipe', 'pipe'],
       shell: process.platform === 'win32'
     });
