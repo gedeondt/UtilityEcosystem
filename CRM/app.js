@@ -8,6 +8,13 @@ const SEED_RATE = (() => {
   return Number.isFinite(arg) && arg > 0 ? Math.floor(arg) : 1;
 })();
 
+const isVerbose = process.env.TE_VERBOSE === 'true';
+const verboseLog = (...args) => {
+  if (isVerbose) {
+    console.log(...args);
+  }
+};
+
 const MAX_CLIENTS = (() => {
   const arg = Number(process.argv[3]);
   return Number.isFinite(arg) && arg > 0 ? Math.floor(arg) : null;
@@ -115,7 +122,7 @@ function seed(count) {
     MAX_CLIENTS === null ? count : Math.max(0, MAX_CLIENTS - clients.length);
 
   if (remainingCapacity <= 0) {
-    console.log('Límite máximo de clientes alcanzado.');
+    verboseLog('Límite máximo de clientes alcanzado.');
     return [];
   }
 
@@ -130,7 +137,7 @@ function seed(count) {
     contracts.push(bundle.contract);
     created.push(bundle.client.id);
   }
-  console.log(`Añadidos ${toCreate} clientes. Total clientes: ${clients.length}`);
+  verboseLog(`Añadidos ${toCreate} clientes. Total clientes: ${clients.length}`);
   return created;
 }
 
@@ -201,15 +208,15 @@ const server = http.createServer((req, res) => {
 
 server.listen(PORT, () => {
   console.log(`CRM escuchando en http://localhost:${PORT}`);
-  console.log(`Sembrando ${SEED_RATE} cliente(s) cada ${SEED_INTERVAL_MS / 1000} segundos...`);
+  verboseLog(`Sembrando ${SEED_RATE} cliente(s) cada ${SEED_INTERVAL_MS / 1000} segundos...`);
   if (MAX_CLIENTS !== null) {
-    console.log(`Límite máximo de clientes configurado en ${MAX_CLIENTS}.`);
+    verboseLog(`Límite máximo de clientes configurado en ${MAX_CLIENTS}.`);
   }
 
   seed(SEED_RATE);
 
   if (MAX_CLIENTS !== null && clients.length >= MAX_CLIENTS) {
-    console.log('Generación automática deshabilitada: límite máximo alcanzado tras la inicialización.');
+    verboseLog('Generación automática deshabilitada: límite máximo alcanzado tras la inicialización.');
     return;
   }
 
@@ -217,7 +224,7 @@ server.listen(PORT, () => {
     seed(SEED_RATE);
     if (MAX_CLIENTS !== null && clients.length >= MAX_CLIENTS) {
       clearInterval(interval);
-      console.log('Deteniendo generación automática: límite máximo alcanzado.');
+      verboseLog('Deteniendo generación automática: límite máximo alcanzado.');
     }
   }, SEED_INTERVAL_MS);
 });

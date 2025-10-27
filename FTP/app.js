@@ -8,6 +8,13 @@ const DEFAULT_POLL_INTERVAL = 60_000;
 const DEFAULT_PAGE_SIZE = 50;
 const DEFAULT_FTP_ROOT = path.join(__dirname, 'ftp-data');
 
+const isVerbose = process.env.TE_VERBOSE === 'true';
+const verboseLog = (...args) => {
+  if (isVerbose) {
+    console.log(...args);
+  }
+};
+
 function parseArgs(argv) {
   const options = {
     crmHost: 'localhost',
@@ -168,7 +175,9 @@ async function main() {
   }
 
   console.log(`Servidor FTP escuchando en ftp://0.0.0.0:${ftpPort}`);
-  console.log(`Consultando contratos del CRM en ${crmHost}:${crmPort} cada ${pollInterval / 1000} segundos`);
+  verboseLog(
+    `Consultando contratos del CRM en ${crmHost}:${crmPort} cada ${pollInterval / 1000} segundos`
+  );
 
   const baseDate = new Date();
   let iteration = 0;
@@ -177,7 +186,7 @@ async function main() {
     const targetDate = new Date(baseDate);
     targetDate.setDate(baseDate.getDate() + iteration);
 
-    console.log(`Generando ficheros P5D para la fecha ${targetDate.toISOString().slice(0, 10)}`);
+    verboseLog(`Generando ficheros P5D para la fecha ${targetDate.toISOString().slice(0, 10)}`);
 
     let contracts;
     try {
@@ -188,7 +197,7 @@ async function main() {
     }
 
     if (contracts.length === 0) {
-      console.log('No se encontraron contratos activos en esta iteración.');
+      verboseLog('No se encontraron contratos activos en esta iteración.');
     }
 
     await Promise.all(
@@ -198,7 +207,7 @@ async function main() {
         const destination = path.join(ftpRootDir, fileName);
         try {
           await writeFile(destination, content, 'utf8');
-          console.log(`Generado fichero ${fileName}`);
+          verboseLog(`Generado fichero ${fileName}`);
         } catch (error) {
           console.error(`No se pudo escribir el fichero ${fileName}: ${error.message}`);
         }
