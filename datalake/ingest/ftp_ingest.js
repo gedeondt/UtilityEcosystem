@@ -36,8 +36,33 @@ async function ensureDirectory(directoryPath) {
   await fs.promises.mkdir(directoryPath, { recursive: true });
 }
 
+function sanitisePathComponent(input) {
+  return (input || '')
+    .replace(/^\/+/, '')
+    .replace(/\/+/g, '-')
+    .replace(/[^a-z0-9-.]/gi, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+    .trim();
+}
+
+function buildTimestamp() {
+  return new Date().toISOString().replace(/[.:]/g, '-');
+}
+
+function buildLocalFilePath(itemName, timestamp) {
+  const parsed = path.parse(itemName);
+  const baseName = sanitisePathComponent(parsed.name) || 'file';
+  const extension = parsed.ext || '';
+  return `${baseName}-${timestamp}${extension}`;
+}
+
 async function downloadFromFtp() {
   const runStartedAt = new Date();
+  const timestamp = buildTimestamp();
+  const remoteDirComponent = sanitisePathComponent(ftpRemoteDir) || 'root';
+  const runOutputDir = path.join(outputDir, remoteDirComponent);
+
   console.info(`Starting FTP ingestion cycle at ${runStartedAt.toISOString()}...`);
   const client = new ftp.Client();
   client.ftp.verbose = false;
@@ -61,7 +86,7 @@ async function downloadFromFtp() {
       console.info('Using FTP root directory.');
     }
 
-    await ensureDirectory(outputDir);
+    await ensureDirectory(runOutputDir);
     const listing = await client.list();
 
     console.info(`Retrieved ${listing.length} entries from FTP directory.`);
@@ -85,7 +110,7 @@ async function downloadFromFtp() {
     }
 
     for (const item of downloadableItems) {
-      const localPath = path.join(outputDir, item.name);
+      const localPath = path.join(runOutputDir, buildLocalFilePath(item.name, timestamp));
       const tempPath = `${localPath}.downloading`;
 
       try {
