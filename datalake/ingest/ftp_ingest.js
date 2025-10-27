@@ -150,7 +150,7 @@ async function start(outputDir) {
   verboseInfo(
     `Scheduled recurring FTP ingestion every ${Math.round(intervalMs / 1000)} seconds.`
   );
-  setInterval(downloadFromFtp, intervalMs);
+  setInterval(() => downloadFromFtp(outputDir), intervalMs);
 }
 
 
