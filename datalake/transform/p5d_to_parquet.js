@@ -1,6 +1,6 @@
 const fsp = require('fs/promises');
 const path = require('path');
-const { ParquetSchema, ParquetWriter } = require('parquetjs-lite');
+const { ParquetSchema, ParquetWriter } = require('@dsnp/parquetjs');
 
 const DEFAULT_INTERVAL_MS = 180_000;
 const DEFAULT_INPUT_DIR = path.resolve(__dirname, '..', 'data', 'landing', 'ftp');
