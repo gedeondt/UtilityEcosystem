@@ -57,6 +57,14 @@ const services = [
     env: {}
   },
   {
+    name: 'Event Log',
+    cwd: path.join(rootDir, 'eventlog'),
+    command: 'node',
+    args: ['app.js'],
+    readyRegex: /Event Log service listening on http:\/\/localhost:(\d+)/,
+    ports: [{ port: 3050, host: '127.0.0.1' }]
+  },
+  {
     name: 'Control Center Backend',
     cwd: path.join(rootDir, 'controlcenter', 'backend'),
     command: 'node',

@@ -1,0 +1,13 @@
+{
+  "name": "eventlog",
+  "version": "1.0.0",
+  "description": "Servicio sencillo de registro de eventos tipo cola",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js"
+  },
+  "keywords": ["eventos", "log", "cola"],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs"
+}
