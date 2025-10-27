@@ -6,14 +6,13 @@ const DEFAULT_INTERVAL_MS = 3 * 60 * 1000;
 const DEFAULT_FTP_PORT = 2121;
 const DEFAULT_REMOTE_DIR = '/';
 
-const [, , cliHost, cliOutputDir, cliInterval] = process.argv;
+const [, , cliHost, cliPort, cliOutputDir, cliInterval] = process.argv;
 
 const ftpHost = process.env.FTP_HOST || cliHost;
-const ftpPortValue = process.env.FTP_PORT;
+const ftpPortValue = process.env.FTP_PORT || cliPort;
 const ftpPort = ftpPortValue ? Number(ftpPortValue) : DEFAULT_FTP_PORT;
 const ftpRemoteDir = process.env.FTP_REMOTE_DIR || DEFAULT_REMOTE_DIR;
 const outputDir = process.env.FTP_OUTPUT_DIR || cliOutputDir || path.resolve(__dirname, '..', 'data', 'landing', 'ftp');
-
 const configuredInterval = process.env.FTP_POLL_INTERVAL_MS || cliInterval;
 const intervalMs = configuredInterval ? Number(configuredInterval) : DEFAULT_INTERVAL_MS;
 
@@ -57,7 +56,7 @@ function buildLocalFilePath(itemName, timestamp) {
   return `${baseName}-${timestamp}${extension}`;
 }
 
-async function downloadFromFtp() {
+async function downloadFromFtp(outputDir) {
   const runStartedAt = new Date();
   const timestamp = buildTimestamp();
   const remoteDirComponent = sanitisePathComponent(ftpRemoteDir) || 'root';
@@ -136,16 +135,17 @@ async function downloadFromFtp() {
   }
 }
 
-async function start() {
+async function start(outputDir) {
   await ensureDirectory(outputDir);
-  await downloadFromFtp();
+  await downloadFromFtp(outputDir);
   console.info(
     `Scheduled recurring FTP ingestion every ${Math.round(intervalMs / 1000)} seconds.`
   );
   setInterval(downloadFromFtp, intervalMs);
 }
 
-start().catch((error) => {
+
+start(outputDir).catch((error) => {
   console.error('Fatal error starting FTP ingestion script:', error);
   process.exit(1);
 });
