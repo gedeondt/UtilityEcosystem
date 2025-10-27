@@ -8,6 +8,6 @@
     "start:p5d": "node p5d_to_parquet.js"
   },
   "dependencies": {
-    "parquetjs-lite": "^0.21.0"
+    "@dsnp/parquetjs": "^1.6.0"
   }
 }
