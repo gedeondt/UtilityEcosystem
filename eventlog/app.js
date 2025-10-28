@@ -20,6 +20,28 @@ async function ensureBaseDir() {
   await fsp.mkdir(LOG_ROOT, { recursive: true });
 }
 
+async function purgeLogDirectory() {
+  try {
+    await fsp.rm(LOG_ROOT, { recursive: true, force: true });
+  } catch (error) {
+    if (error.code !== 'ENOENT') {
+      console.warn('No se pudo limpiar el directorio de logs:', error.message);
+    }
+  }
+}
+
+function registerExitCleanup() {
+  process.once('exit', () => {
+    try {
+      fs.rmSync(LOG_ROOT, { recursive: true, force: true });
+    } catch (error) {
+      if (error.code !== 'ENOENT') {
+        console.warn('No se pudo limpiar el directorio de logs al salir:', error.message);
+      }
+    }
+  });
+}
+
 function sanitizeChannel(channel) {
   if (typeof channel !== 'string' || channel.trim().length === 0) {
     throw new Error('Canal requerido');
@@ -181,7 +203,9 @@ function requestHandler(req, res) {
 }
 
 async function start() {
+  await purgeLogDirectory();
   await ensureBaseDir();
+  registerExitCleanup();
   const server = http.createServer(requestHandler);
 
   server.listen(PORT, HOST, () => {
@@ -189,11 +213,23 @@ async function start() {
   });
 
   const signals = ['SIGINT', 'SIGTERM'];
+  let shuttingDown = false;
   for (const signal of signals) {
     process.on(signal, () => {
+      if (shuttingDown) {
+        return;
+      }
+      shuttingDown = true;
+
       console.log(`Recibida señal ${signal}, cerrando Event Log...`);
       server.close(() => {
-        process.exit(0);
+        purgeLogDirectory()
+          .catch((error) => {
+            console.error('No se pudo limpiar el directorio de logs:', error);
+          })
+          .finally(() => {
+            process.exit(0);
+          });
       });
     });
   }

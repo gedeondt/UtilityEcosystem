@@ -1,5 +1,6 @@
+const fs = require('fs');
 const path = require('path');
-const { mkdir, writeFile } = require('fs/promises');
+const { mkdir, rm, writeFile } = require('fs/promises');
 const { setInterval } = require('timers');
 const FtpSrv = require('ftp-srv');
 
@@ -134,6 +135,30 @@ function buildP5DContent(contract, date) {
   return lines.join('\n');
 }
 
+async function resetFtpDirectory(directory) {
+  try {
+    await rm(directory, { recursive: true, force: true });
+  } catch (error) {
+    if (error.code !== 'ENOENT') {
+      console.warn(`No se pudo limpiar el directorio FTP ${directory}:`, error.message);
+    }
+  }
+
+  await mkdir(directory, { recursive: true });
+}
+
+function registerExitCleanup(directory) {
+  process.once('exit', () => {
+    try {
+      fs.rmSync(directory, { recursive: true, force: true });
+    } catch (error) {
+      if (error.code !== 'ENOENT') {
+        console.warn(`No se pudo limpiar el directorio FTP ${directory} al salir:`, error.message);
+      }
+    }
+  });
+}
+
 async function main() {
   let options;
   try {
@@ -153,11 +178,15 @@ async function main() {
     process.exit(1);
   }
 
+  await resetFtpDirectory(ftpRootDir);
+
   const ftpServer = new FtpSrv({
     url: `ftp://0.0.0.0:${ftpPort}`,
     anonymous: true,
     greeting: ['Servidor FTP de contratos energéticos listo']
   });
+
+  registerExitCleanup(ftpRootDir);
 
   ftpServer.on('login', ({ connection }, resolve, reject) => {
     connection.on('STOR', () => {
@@ -181,6 +210,46 @@ async function main() {
 
   const baseDate = new Date();
   let iteration = 0;
+  let cycleInterval = null;
+  let shuttingDown = false;
+
+  const shutdown = async (signal) => {
+    if (shuttingDown) {
+      return;
+    }
+    shuttingDown = true;
+
+    console.log(`Recibida señal ${signal}, cerrando servidor FTP...`);
+
+    if (cycleInterval) {
+      clearInterval(cycleInterval);
+    }
+
+    try {
+      await ftpServer.close();
+    } catch (error) {
+      if (error && error.message) {
+        console.warn('Error al cerrar el servidor FTP:', error.message);
+      }
+    }
+
+    try {
+      await resetFtpDirectory(ftpRootDir);
+    } catch (error) {
+      console.warn('No se pudo limpiar el directorio FTP durante el apagado:', error.message);
+    }
+
+    process.exit(0);
+  };
+
+  for (const signal of ['SIGINT', 'SIGTERM']) {
+    process.on(signal, () => {
+      shutdown(signal).catch((error) => {
+        console.error('Error inesperado durante el apagado del servidor FTP:', error);
+        process.exit(1);
+      });
+    });
+  }
 
   const runCycle = async () => {
     const targetDate = new Date(baseDate);
@@ -218,7 +287,7 @@ async function main() {
   };
 
   await runCycle();
-  setInterval(() => {
+  cycleInterval = setInterval(() => {
     runCycle().catch((error) => {
       console.error('Error inesperado en el ciclo de generación:', error);
     });
