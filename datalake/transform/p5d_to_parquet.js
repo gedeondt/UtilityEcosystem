@@ -1,3 +1,4 @@
+const fs = require('fs');
 const fsp = require('fs/promises');
 const path = require('path');
 const { ParquetSchema, ParquetWriter } = require('@dsnp/parquetjs');
@@ -14,6 +15,39 @@ const verboseInfo = (...args) => {
     console.info(...args);
   }
 };
+
+async function purgeGeneratedArtifacts(outputFile) {
+  const targets = [outputFile, STATE_FILE];
+
+  for (const target of targets) {
+    try {
+      await fsp.rm(target, { force: true });
+      if (isVerbose) {
+        console.info(`Eliminado artefacto previo ${target}`);
+      }
+    } catch (error) {
+      if (error.code !== 'ENOENT') {
+        console.warn(`No se pudo eliminar ${target}:`, error.message);
+      }
+    }
+  }
+
+  await ensureDirectory(path.dirname(outputFile));
+}
+
+function registerExitCleanup(outputFile) {
+  process.once('exit', () => {
+    for (const target of [outputFile, STATE_FILE]) {
+      try {
+        fs.rmSync(target, { force: true });
+      } catch (error) {
+        if (error.code !== 'ENOENT') {
+          console.warn(`No se pudo eliminar ${target} al salir:`, error.message);
+        }
+      }
+    }
+  });
+}
 
 function parseCliArgs(argv) {
   const options = {
@@ -216,16 +250,25 @@ async function processCycle({ inputDir, outputFile, processedFiles, schema }) {
   }
 }
 
+let intervalHandle = null;
+let shuttingDown = false;
+let configuredOutputFile = null;
+
 async function main() {
   let options;
   try {
     options = parseCliArgs(process.argv);
   } catch (error) {
-    console.error(error.message);
-    process.exit(1);
+    throw error;
   }
 
+  configuredOutputFile = options.outputFile;
+
+  registerExitCleanup(options.outputFile);
+  setupSignalHandlers(options);
+
   const schema = buildSchema();
+  await purgeGeneratedArtifacts(options.outputFile);
   const processedFiles = await loadState();
 
   console.info('Iniciando transformación P5D → Parquet...');
@@ -245,10 +288,53 @@ async function main() {
   };
 
   await executeCycle();
-  setInterval(executeCycle, options.intervalMs);
+  intervalHandle = setInterval(executeCycle, options.intervalMs);
 }
 
-main().catch((error) => {
-  console.error('Error fatal al iniciar el proceso de transformación:', error);
-  process.exit(1);
-});
+function setupSignalHandlers(options) {
+  const signals = ['SIGINT', 'SIGTERM'];
+  for (const signal of signals) {
+    process.on(signal, () => {
+      if (shuttingDown) {
+        return;
+      }
+      shuttingDown = true;
+
+      console.log(`Recibida señal ${signal}, deteniendo transformación P5D → Parquet...`);
+
+      if (intervalHandle) {
+        clearInterval(intervalHandle);
+      }
+
+      purgeGeneratedArtifacts(options.outputFile)
+        .catch((error) => {
+          console.error('No se pudieron eliminar los artefactos generados:', error);
+        })
+        .finally(() => {
+          process.exit(0);
+        });
+    });
+  }
+}
+
+main()
+  .catch((error) => {
+    console.error('Error fatal al iniciar el proceso de transformación:', error);
+    if (configuredOutputFile) {
+      purgeGeneratedArtifacts(configuredOutputFile)
+        .catch((cleanupError) => {
+          if (cleanupError.code !== 'ENOENT') {
+            console.error(
+              'No se pudieron eliminar los artefactos tras fallo de arranque:',
+              cleanupError
+            );
+          }
+        })
+        .finally(() => {
+          process.exit(1);
+        });
+      return;
+    }
+
+    process.exit(1);
+  });

@@ -22,6 +22,28 @@ const verboseInfo = (...args) => {
   }
 };
 
+async function purgeOutputDirectory(directoryPath) {
+  try {
+    await fs.promises.rm(directoryPath, { recursive: true, force: true });
+  } catch (error) {
+    if (error.code !== 'ENOENT') {
+      console.warn(`No se pudo limpiar el directorio ${directoryPath}:`, error.message);
+    }
+  }
+}
+
+function registerExitCleanup(directoryPath) {
+  process.once('exit', () => {
+    try {
+      fs.rmSync(directoryPath, { recursive: true, force: true });
+    } catch (error) {
+      if (error.code !== 'ENOENT') {
+        console.warn(`No se pudo limpiar el directorio ${directoryPath} al salir:`, error.message);
+      }
+    }
+  });
+}
+
 if (!serviceUrl) {
   console.error('CRM service URL must be provided via CRM_SERVICE_URL env var or first CLI argument.');
   process.exit(1);
@@ -141,14 +163,61 @@ async function fetchCrmData(endpoints) {
   }
 }
 
+let pollingHandle = null;
+let shuttingDown = false;
+
 async function start() {
+  await purgeOutputDirectory(outputDir);
   await ensureDirectory(outputDir);
   verboseInfo(`Configured ${CRM_ENDPOINTS.length} CRM endpoint(s).`);
   await fetchCrmData(CRM_ENDPOINTS);
-  setInterval(() => fetchCrmData(CRM_ENDPOINTS), intervalMs);
+  const runCycle = () => {
+    fetchCrmData(CRM_ENDPOINTS).catch((error) => {
+      console.error('Error inesperado en el ciclo de ingesta del CRM:', error);
+    });
+  };
+  pollingHandle = setInterval(runCycle, intervalMs);
 }
+
+function setupSignalHandlers() {
+  registerExitCleanup(outputDir);
+
+  const signals = ['SIGINT', 'SIGTERM'];
+  for (const signal of signals) {
+    process.on(signal, () => {
+      if (shuttingDown) {
+        return;
+      }
+      shuttingDown = true;
+
+      console.log(`Recibida señal ${signal}, deteniendo ingesta del CRM...`);
+
+      if (pollingHandle) {
+        clearInterval(pollingHandle);
+      }
+
+      purgeOutputDirectory(outputDir)
+        .catch((error) => {
+          console.error('No se pudo limpiar el directorio de ingesta del CRM:', error);
+        })
+        .finally(() => {
+          process.exit(0);
+        });
+    });
+  }
+}
+
+setupSignalHandlers();
 
 start().catch((error) => {
   console.error('Fatal error starting CRM ingestion script:', error);
-  process.exit(1);
+  purgeOutputDirectory(outputDir)
+    .catch((cleanupError) => {
+      if (cleanupError.code !== 'ENOENT') {
+        console.error('No se pudo limpiar el directorio tras fallo de arranque:', cleanupError);
+      }
+    })
+    .finally(() => {
+      process.exit(1);
+    });
 });

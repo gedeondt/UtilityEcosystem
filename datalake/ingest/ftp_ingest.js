@@ -23,6 +23,28 @@ const verboseInfo = (...args) => {
   }
 };
 
+async function purgeOutputDirectory(directoryPath) {
+  try {
+    await fs.promises.rm(directoryPath, { recursive: true, force: true });
+  } catch (error) {
+    if (error.code !== 'ENOENT') {
+      console.warn(`No se pudo limpiar el directorio ${directoryPath}:`, error.message);
+    }
+  }
+}
+
+function registerExitCleanup(directoryPath) {
+  process.once('exit', () => {
+    try {
+      fs.rmSync(directoryPath, { recursive: true, force: true });
+    } catch (error) {
+      if (error.code !== 'ENOENT') {
+        console.warn(`No se pudo limpiar el directorio ${directoryPath} al salir:`, error.message);
+      }
+    }
+  });
+}
+
 if (!ftpHost) {
   console.error('FTP host must be provided via FTP_HOST env var or first CLI argument.');
   process.exit(1);
@@ -144,17 +166,63 @@ async function downloadFromFtp(outputDir) {
   }
 }
 
+let pollingHandle = null;
+let shuttingDown = false;
+
 async function start(outputDir) {
+  await purgeOutputDirectory(outputDir);
   await ensureDirectory(outputDir);
   await downloadFromFtp(outputDir);
   verboseInfo(
     `Scheduled recurring FTP ingestion every ${Math.round(intervalMs / 1000)} seconds.`
   );
-  setInterval(() => downloadFromFtp(outputDir), intervalMs);
+  pollingHandle = setInterval(() => {
+    downloadFromFtp(outputDir).catch((error) => {
+      console.error('Error inesperado en el ciclo de ingesta del FTP:', error);
+    });
+  }, intervalMs);
 }
 
 
+function setupSignalHandlers() {
+  registerExitCleanup(outputDir);
+
+  const signals = ['SIGINT', 'SIGTERM'];
+  for (const signal of signals) {
+    process.on(signal, () => {
+      if (shuttingDown) {
+        return;
+      }
+      shuttingDown = true;
+
+      console.log(`Recibida señal ${signal}, deteniendo ingesta del FTP...`);
+
+      if (pollingHandle) {
+        clearInterval(pollingHandle);
+      }
+
+      purgeOutputDirectory(outputDir)
+        .catch((error) => {
+          console.error('No se pudo limpiar el directorio de ingesta del FTP:', error);
+        })
+        .finally(() => {
+          process.exit(0);
+        });
+    });
+  }
+}
+
+setupSignalHandlers();
+
 start(outputDir).catch((error) => {
   console.error('Fatal error starting FTP ingestion script:', error);
-  process.exit(1);
+  purgeOutputDirectory(outputDir)
+    .catch((cleanupError) => {
+      if (cleanupError.code !== 'ENOENT') {
+        console.error('No se pudo limpiar el directorio tras fallo de arranque:', cleanupError);
+      }
+    })
+    .finally(() => {
+      process.exit(1);
+    });
 });
