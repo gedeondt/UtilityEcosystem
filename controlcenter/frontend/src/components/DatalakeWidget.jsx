@@ -9,21 +9,10 @@ import {
   Bar,
   Cell,
 } from 'recharts';
+import { getApiBaseUrl } from '../utils/api.js';
 import './DatalakeWidget.css';
 
 const COLORS = ['#2563eb', '#0ea5e9', '#10b981', '#f59e0b', '#ec4899', '#6366f1'];
-
-function getApiBaseUrl() {
-  if (import.meta.env.VITE_API_BASE_URL) {
-    return import.meta.env.VITE_API_BASE_URL;
-  }
-
-  if (typeof window !== 'undefined' && window.location) {
-    return `${window.location.protocol}//${window.location.hostname}:4000`;
-  }
-
-  return 'http://localhost:4000';
-}
 
 export default function DatalakeWidget() {
   const [data, setData] = useState([]);
