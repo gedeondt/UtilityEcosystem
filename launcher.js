@@ -73,6 +73,14 @@ const services = [
     env: {}
   },
   {
+    name: 'Transformación consumo medio horario',
+    cwd: path.join(rootDir, 'datalake', 'transform'),
+    command: 'node',
+    args: ['p5d_hourly_consumption_to_json.js', '--interval-ms', '60000'],
+    readyRegex: /Iniciando generación de consumo medio horario en Gold/,
+    env: {}
+  },
+  {
     name: 'Control Center Backend',
     cwd: path.join(rootDir, 'controlcenter', 'backend'),
     command: 'node',
@@ -101,6 +109,7 @@ const cleanupTargets = [
   path.join(rootDir, 'datalake', 'data', 'landing', 'crm'),
   path.join(rootDir, 'datalake', 'data', 'landing', 'ftp'),
   path.join(rootDir, 'datalake', 'data', 'silver', 'p5d'),
+  path.join(rootDir, 'datalake', 'data', 'gold'),
   path.join(rootDir, 'datalake', 'transform', '.p5d_transform_state.json')
 ];
 
