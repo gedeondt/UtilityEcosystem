@@ -22,28 +22,6 @@ const verboseInfo = (...args) => {
   }
 };
 
-async function purgeOutputDirectory(directoryPath) {
-  try {
-    await fs.promises.rm(directoryPath, { recursive: true, force: true });
-  } catch (error) {
-    if (error.code !== 'ENOENT') {
-      console.warn(`No se pudo limpiar el directorio ${directoryPath}:`, error.message);
-    }
-  }
-}
-
-function registerExitCleanup(directoryPath) {
-  process.once('exit', () => {
-    try {
-      fs.rmSync(directoryPath, { recursive: true, force: true });
-    } catch (error) {
-      if (error.code !== 'ENOENT') {
-        console.warn(`No se pudo limpiar el directorio ${directoryPath} al salir:`, error.message);
-      }
-    }
-  });
-}
-
 if (!serviceUrl) {
   console.error('CRM service URL must be provided via CRM_SERVICE_URL env var or first CLI argument.');
   process.exit(1);
@@ -168,7 +146,6 @@ let shuttingDown = false;
 let currentCyclePromise = Promise.resolve();
 
 async function start() {
-  await purgeOutputDirectory(outputDir);
   await ensureDirectory(outputDir);
   verboseInfo(`Configured ${CRM_ENDPOINTS.length} CRM endpoint(s).`);
 
@@ -196,8 +173,6 @@ async function start() {
 }
 
 function setupSignalHandlers() {
-  registerExitCleanup(outputDir);
-
   const signals = ['SIGINT', 'SIGTERM'];
   for (const signal of signals) {
     process.on(signal, () => {
@@ -217,30 +192,17 @@ function setupSignalHandlers() {
         .catch((error) => {
           console.error('Error en el ciclo de ingesta del CRM durante el apagado:', error);
         })
-        .finally(() =>
-          purgeOutputDirectory(outputDir)
-            .catch((error) => {
-              console.error('No se pudo limpiar el directorio de ingesta del CRM:', error);
-            })
-            .finally(() => {
-              process.exit(0);
-            })
-        );
+        .finally(() => {
+          process.exit(0);
+        });
     });
   }
 }
 
 setupSignalHandlers();
 
-start().catch((error) => {
-  console.error('Fatal error starting CRM ingestion script:', error);
-  purgeOutputDirectory(outputDir)
-    .catch((cleanupError) => {
-      if (cleanupError.code !== 'ENOENT') {
-        console.error('No se pudo limpiar el directorio tras fallo de arranque:', cleanupError);
-      }
-    })
-    .finally(() => {
-      process.exit(1);
-    });
-});
+start()
+  .catch((error) => {
+    console.error('Fatal error starting CRM ingestion script:', error);
+    process.exit(1);
+  });

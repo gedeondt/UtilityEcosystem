@@ -1,4 +1,3 @@
-const fs = require('fs');
 const fsp = require('fs/promises');
 const path = require('path');
 const { ParquetSchema, ParquetWriter } = require('@dsnp/parquetjs');
@@ -15,39 +14,6 @@ const verboseInfo = (...args) => {
     console.info(...args);
   }
 };
-
-async function purgeGeneratedArtifacts(outputFile) {
-  const targets = [outputFile, STATE_FILE];
-
-  for (const target of targets) {
-    try {
-      await fsp.rm(target, { force: true });
-      if (isVerbose) {
-        console.info(`Eliminado artefacto previo ${target}`);
-      }
-    } catch (error) {
-      if (error.code !== 'ENOENT') {
-        console.warn(`No se pudo eliminar ${target}:`, error.message);
-      }
-    }
-  }
-
-  await ensureDirectory(path.dirname(outputFile));
-}
-
-function registerExitCleanup(outputFile) {
-  process.once('exit', () => {
-    for (const target of [outputFile, STATE_FILE]) {
-      try {
-        fs.rmSync(target, { force: true });
-      } catch (error) {
-        if (error.code !== 'ENOENT') {
-          console.warn(`No se pudo eliminar ${target} al salir:`, error.message);
-        }
-      }
-    }
-  });
-}
 
 function parseCliArgs(argv) {
   const options = {
@@ -252,7 +218,6 @@ async function processCycle({ inputDir, outputFile, processedFiles, schema }) {
 
 let intervalHandle = null;
 let shuttingDown = false;
-let configuredOutputFile = null;
 
 async function main() {
   let options;
@@ -262,13 +227,10 @@ async function main() {
     throw error;
   }
 
-  configuredOutputFile = options.outputFile;
-
-  registerExitCleanup(options.outputFile);
   setupSignalHandlers(options);
 
   const schema = buildSchema();
-  await purgeGeneratedArtifacts(options.outputFile);
+  await ensureDirectory(path.dirname(options.outputFile));
   const processedFiles = await loadState();
 
   console.info('Iniciando transformación P5D → Parquet...');
@@ -306,13 +268,7 @@ function setupSignalHandlers(options) {
         clearInterval(intervalHandle);
       }
 
-      purgeGeneratedArtifacts(options.outputFile)
-        .catch((error) => {
-          console.error('No se pudieron eliminar los artefactos generados:', error);
-        })
-        .finally(() => {
-          process.exit(0);
-        });
+      process.exit(0);
     });
   }
 }
@@ -320,21 +276,5 @@ function setupSignalHandlers(options) {
 main()
   .catch((error) => {
     console.error('Error fatal al iniciar el proceso de transformación:', error);
-    if (configuredOutputFile) {
-      purgeGeneratedArtifacts(configuredOutputFile)
-        .catch((cleanupError) => {
-          if (cleanupError.code !== 'ENOENT') {
-            console.error(
-              'No se pudieron eliminar los artefactos tras fallo de arranque:',
-              cleanupError
-            );
-          }
-        })
-        .finally(() => {
-          process.exit(1);
-        });
-      return;
-    }
-
     process.exit(1);
   });

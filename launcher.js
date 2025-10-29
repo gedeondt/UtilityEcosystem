@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 const { spawn } = require('child_process');
+const fs = require('fs/promises');
 const net = require('net');
 const path = require('path');
 const readline = require('readline');
@@ -87,6 +88,14 @@ const services = [
 
 const runningProcesses = new Set();
 let shuttingDown = false;
+
+const cleanupTargets = [
+  path.join(rootDir, 'eventlog', 'log'),
+  path.join(rootDir, 'datalake', 'data', 'landing', 'crm'),
+  path.join(rootDir, 'datalake', 'data', 'landing', 'ftp'),
+  path.join(rootDir, 'datalake', 'data', 'silver', 'p5d'),
+  path.join(rootDir, 'datalake', 'transform', '.p5d_transform_state.json')
+];
 
 function log(message) {
   const timestamp = new Date().toISOString();
@@ -197,10 +206,23 @@ async function startService(service) {
 }
 
 async function launch() {
+  await cleanWorkingDirectories();
   for (const service of services) {
     await startService(service);
   }
   log('Todos los servicios están en ejecución. Presiona Ctrl+C para detenerlos.');
+}
+
+async function cleanWorkingDirectories() {
+  log('Limpiando artefactos previos...');
+  for (const target of cleanupTargets) {
+    try {
+      await fs.rm(target, { recursive: true, force: true });
+      log(`Limpieza completada para ${target}`);
+    } catch (error) {
+      log(`No se pudo limpiar ${target}: ${error.message}`);
+    }
+  }
 }
 
 async function shutdown() {
