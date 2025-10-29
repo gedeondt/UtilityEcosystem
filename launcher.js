@@ -14,12 +14,27 @@ const defaultVerbose = process.env.TE_VERBOSE === 'true' ? 'true' : 'false';
 
 const services = [
   {
+    name: 'Event Log',
+    cwd: path.join(rootDir, 'eventlog'),
+    command: 'node',
+    args: ['app.js'],
+    readyRegex: /Event Log service listening on http:\/\/localhost:(\d+)/,
+    ports: [{ port: 3050, host: '127.0.0.1' }]
+  },
+  {
     name: 'CRM',
     cwd: path.join(rootDir, 'CRM'),
     command: 'node',
     args: ['app.js'],
     readyRegex: /CRM escuchando en http:\/\/localhost:(\d+)/,
     ports: [{ port: 3000, host: '127.0.0.1' }]
+  },
+  {
+    name: 'E-commerce',
+    cwd: path.join(rootDir, 'ecommerce'),
+    command: 'node',
+    args: ['app.js'],
+    readyRegex: /Emisor e-commerce activo\./
   },
   {
     name: 'FTP',
@@ -56,14 +71,6 @@ const services = [
     args: ['p5d_to_parquet.js', '--interval-ms', '60000'],
     readyRegex: /Iniciando transformación P5D → Parquet/,
     env: {}
-  },
-  {
-    name: 'Event Log',
-    cwd: path.join(rootDir, 'eventlog'),
-    command: 'node',
-    args: ['app.js'],
-    readyRegex: /Event Log service listening on http:\/\/localhost:(\d+)/,
-    ports: [{ port: 3050, host: '127.0.0.1' }]
   },
   {
     name: 'Control Center Backend',
