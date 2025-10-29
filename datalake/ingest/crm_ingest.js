@@ -165,18 +165,34 @@ async function fetchCrmData(endpoints) {
 
 let pollingHandle = null;
 let shuttingDown = false;
+let currentCyclePromise = Promise.resolve();
 
 async function start() {
   await purgeOutputDirectory(outputDir);
   await ensureDirectory(outputDir);
   verboseInfo(`Configured ${CRM_ENDPOINTS.length} CRM endpoint(s).`);
-  await fetchCrmData(CRM_ENDPOINTS);
-  const runCycle = () => {
-    fetchCrmData(CRM_ENDPOINTS).catch((error) => {
-      console.error('Error inesperado en el ciclo de ingesta del CRM:', error);
-    });
-  };
-  pollingHandle = setInterval(runCycle, intervalMs);
+
+  const executeCycle = () => fetchCrmData(CRM_ENDPOINTS);
+
+  currentCyclePromise = executeCycle();
+  await currentCyclePromise;
+
+  if (shuttingDown) {
+    return;
+  }
+
+  pollingHandle = setInterval(() => {
+    if (shuttingDown) {
+      return;
+    }
+    currentCyclePromise = currentCyclePromise
+      .catch(() => {})
+      .then(() =>
+        executeCycle().catch((error) => {
+          console.error('Error inesperado en el ciclo de ingesta del CRM:', error);
+        })
+      );
+  }, intervalMs);
 }
 
 function setupSignalHandlers() {
@@ -194,15 +210,22 @@ function setupSignalHandlers() {
 
       if (pollingHandle) {
         clearInterval(pollingHandle);
+        pollingHandle = null;
       }
 
-      purgeOutputDirectory(outputDir)
+      currentCyclePromise
         .catch((error) => {
-          console.error('No se pudo limpiar el directorio de ingesta del CRM:', error);
+          console.error('Error en el ciclo de ingesta del CRM durante el apagado:', error);
         })
-        .finally(() => {
-          process.exit(0);
-        });
+        .finally(() =>
+          purgeOutputDirectory(outputDir)
+            .catch((error) => {
+              console.error('No se pudo limpiar el directorio de ingesta del CRM:', error);
+            })
+            .finally(() => {
+              process.exit(0);
+            })
+        );
     });
   }
 }
