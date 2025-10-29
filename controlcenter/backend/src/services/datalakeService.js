@@ -1,7 +1,6 @@
-import { readdir } from 'fs/promises';
+import { readdir, readFile, stat } from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import duckdb from 'duckdb';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -9,18 +8,9 @@ const DATALAKE_ROOT =
   process.env.DATALAKE_ROOT || path.resolve(__dirname, '..', '..', '..', '..', 'datalake', 'data');
 
 const DATALAKE_FOLDERS = ['landing', 'bronce', 'silver', 'gold'];
-const SILVER_AVG_CONSUMPTION_FILE =
-  process.env.SILVER_AVG_CONSUMPTION_FILE ||
-  path.resolve(DATALAKE_ROOT, 'silver', 'avg_customer_consumption_by_hour.parquet');
-
-const HOUR_COLUMN_CANDIDATES = ['hour', 'hour_of_day', 'hora', 'hora_dia'];
-const CONSUMPTION_COLUMN_CANDIDATES = [
-  'consumption_kwh',
-  'avg_consumption_kwh',
-  'average_consumption_kwh',
-  'consumo_kwh',
-  'consumo_medio_kwh',
-];
+const GOLD_HOURLY_CONSUMPTION_FILE =
+  process.env.GOLD_HOURLY_CONSUMPTION_FILE ||
+  path.resolve(DATALAKE_ROOT, 'gold', 'controlcenter', 'hourly_average_consumption.json');
 
 async function countFilesRecursively(dirPath) {
   const entries = await readdir(dirPath, { withFileTypes: true });
@@ -46,13 +36,13 @@ export async function getDatalakeFolderStats() {
       try {
         return {
           name: folderName,
-          fileCount: await countFilesRecursively(folderPath),
+          fileCount: await countFilesRecursively(folderPath)
         };
       } catch (error) {
         if (error.code === 'ENOENT') {
           return {
             name: folderName,
-            fileCount: 0,
+            fileCount: 0
           };
         }
 
@@ -64,107 +54,127 @@ export async function getDatalakeFolderStats() {
   return stats;
 }
 
-function mapDuckDbErrorToNotFound(error) {
-  if (!error) {
-    return false;
+function normalizeNumber(value) {
+  if (value === null || value === undefined) {
+    return null;
   }
 
-  const message = String(error.message || '').toLowerCase();
-  return message.includes('no files found') || message.includes('failed to open file');
-}
-
-function executeAll(connection, query, params) {
-  return new Promise((resolve, reject) => {
-    connection.all(query, params, (err, rows) => {
-      if (err) {
-        reject(err);
-        return;
-      }
-
-      resolve(rows);
-    });
-  });
-}
-
-function quoteIdentifier(identifier) {
-  return `"${String(identifier).replaceAll('"', '""')}"`;
-}
-
-function findColumn(schema, candidates) {
-  const lookup = new Map();
-
-  schema.forEach((column) => {
-    if (column?.column_name) {
-      lookup.set(String(column.column_name).toLowerCase(), column.column_name);
-    }
-  });
-
-  for (const candidate of candidates) {
-    if (lookup.has(candidate)) {
-      return lookup.get(candidate);
-    }
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    return null;
   }
 
-  return null;
+  return parsed;
 }
 
-export async function getAverageConsumptionByHour() {
-  const db = new duckdb.Database(':memory:');
-  const connection = db.connect();
+function mapSummary(rawSummary, rows) {
+  const totalFromRows = rows.reduce((acc, row) => acc + (row.measurementCount ?? 0), 0);
+
+  const totalMeasurements =
+    normalizeNumber(
+      rawSummary?.totalMeasurements ??
+        rawSummary?.total_measurements ??
+        rawSummary?.measurementCount ??
+        rawSummary?.measurement_count
+    ) ?? totalFromRows;
+
+  const distinctContracts =
+    normalizeNumber(
+      rawSummary?.distinctContracts ??
+        rawSummary?.distinct_contracts ??
+        rawSummary?.contractCount ??
+        rawSummary?.contract_count
+    ) ?? 0;
+
+  const distinctReadingDates =
+    normalizeNumber(
+      rawSummary?.distinctReadingDates ??
+        rawSummary?.distinct_reading_dates ??
+        rawSummary?.readingDays ??
+        rawSummary?.reading_days
+    ) ?? 0;
+
+  return {
+    totalMeasurements,
+    distinctContracts,
+    distinctReadingDates
+  };
+}
+
+function mapRow(rawRow) {
+  const hour = normalizeNumber(rawRow?.hour ?? rawRow?.hour_of_day ?? rawRow?.HOUR ?? rawRow?.HOUR_OF_DAY);
+  const averageConsumption = normalizeNumber(
+    rawRow?.averageConsumptionKwh ??
+      rawRow?.average_consumption_kwh ??
+      rawRow?.avg_consumption_kwh ??
+      rawRow?.AVG_CONSUMPTION_KWH
+  );
+
+  if (hour === null || averageConsumption === null) {
+    return null;
+  }
+
+  const measurementCount = normalizeNumber(
+    rawRow?.measurementCount ?? rawRow?.measurement_count ?? rawRow?.MEASUREMENT_COUNT
+  );
+  const contractCount = normalizeNumber(rawRow?.contractCount ?? rawRow?.contract_count ?? rawRow?.CONTRACT_COUNT);
+
+  return {
+    hour,
+    averageConsumptionKwh: averageConsumption,
+    measurementCount: measurementCount ?? null,
+    contractCount: contractCount ?? null
+  };
+}
+
+async function loadGoldHourlyConsumptionFile() {
+  let raw;
 
   try {
-    const schema = await executeAll(
-      connection,
-      'DESCRIBE SELECT * FROM read_parquet(?)',
-      [SILVER_AVG_CONSUMPTION_FILE]
-    );
-
-    const hourColumn = findColumn(schema, HOUR_COLUMN_CANDIDATES);
-    const consumptionColumn = findColumn(schema, CONSUMPTION_COLUMN_CANDIDATES);
-
-    if (!hourColumn || !consumptionColumn) {
-      throw new Error('Silver hourly average consumption dataset does not match the expected schema');
-    }
-
-    const hourIdentifier = quoteIdentifier(hourColumn);
-    const consumptionIdentifier = quoteIdentifier(consumptionColumn);
-
-    const rows = await executeAll(
-      connection,
-      `
-        SELECT
-          ${hourIdentifier} AS hour_of_day,
-          AVG(${consumptionIdentifier}) AS average_consumption_kwh
-        FROM read_parquet(?)
-        GROUP BY ${hourIdentifier}
-        ORDER BY ${hourIdentifier}
-      `,
-      [SILVER_AVG_CONSUMPTION_FILE]
-    );
-
-    return rows
-      .map((row) => {
-        const hour =
-          typeof row.hour_of_day === 'number'
-            ? row.hour_of_day
-            : Number.parseInt(row.hour_of_day ?? row.hour ?? row.HOUR, 10);
-        const average = Number(row.average_consumption_kwh ?? row.AVERAGE_CONSUMPTION_KWH ?? 0);
-
-        return {
-          hour: Number.isNaN(hour) ? null : hour,
-          averageConsumptionKwh: Number.isFinite(average) ? average : null,
-        };
-      })
-      .filter((entry) => entry.hour !== null && entry.averageConsumptionKwh !== null);
+    raw = await readFile(GOLD_HOURLY_CONSUMPTION_FILE, 'utf8');
   } catch (error) {
-    if (mapDuckDbErrorToNotFound(error)) {
-      const notFoundError = new Error('Silver hourly average consumption dataset not found');
+    if (error.code === 'ENOENT') {
+      const notFoundError = new Error('Gold hourly average consumption dataset not found');
       notFoundError.code = 'ENOENT';
       throw notFoundError;
     }
 
     throw error;
-  } finally {
-    connection.close();
   }
+
+  try {
+    return JSON.parse(raw);
+  } catch (error) {
+    const parsingError = new Error('Gold hourly average consumption dataset is not valid JSON');
+    parsingError.cause = error;
+    throw parsingError;
+  }
+}
+
+export async function getAverageConsumptionByHour() {
+  const payload = await loadGoldHourlyConsumptionFile();
+  const rowsSource = Array.isArray(payload?.rows) ? payload.rows : Array.isArray(payload) ? payload : [];
+
+  const rows = rowsSource.map(mapRow).filter((row) => row !== null).sort((a, b) => a.hour - b.hour);
+
+  let generatedAt = payload?.generatedAt ?? null;
+  if (!generatedAt) {
+    try {
+      const fileStats = await stat(GOLD_HOURLY_CONSUMPTION_FILE);
+      generatedAt = fileStats.mtime.toISOString();
+    } catch (error) {
+      if (error.code !== 'ENOENT') {
+        throw error;
+      }
+    }
+  }
+
+  const summary = mapSummary(payload?.summary, rows);
+
+  return {
+    generatedAt,
+    summary,
+    source: payload?.source ?? null,
+    rows
+  };
 }

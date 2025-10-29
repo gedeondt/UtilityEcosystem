@@ -66,6 +66,17 @@
   min-height: 240px;
 }
 
+.hourly-footnote {
+  margin: -0.5rem 0 0;
+  font-size: 0.85rem;
+  color: #64748b;
+}
+
+.hourly-footnote time {
+  font-weight: 600;
+  color: #0f172a;
+}
+
 .hourly-tooltip {
   background: #0f172a;
   color: #f8fafc;

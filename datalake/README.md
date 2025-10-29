@@ -10,7 +10,9 @@ Este módulo define la estructura básica del datalake y los procesos de ingesta
     - `crm/`: almacena los ficheros JSON recibidos del servicio CRM.
     - `ftp/`: almacena los ficheros descargados desde el servidor FTP.
 - `ingest/`: scripts Node.js que ejecutan los procesos de ingesta.
-- `transform/`: scripts Node.js encargados de elevar los datos desde *landing* hasta la capa *silver*.
+- `transform/`: scripts Node.js encargados de refinar los datasets hacia capas superiores.
+  - `p5d_to_parquet.js`: transforma ficheros P5D (`landing/ftp`) en un Parquet *silver* (`silver/p5d/p5d_readings.parquet`).
+  - `p5d_hourly_consumption_to_json.js`: consulta el Parquet *silver* de consumos horarios y publica un JSON *gold* (`gold/controlcenter/hourly_average_consumption.json`) con la estadística usada por el panel de control.
 
 ## Ejecución de los procesos
 

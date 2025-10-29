@@ -13,10 +13,10 @@ router.get('/stats', async (_req, res) => {
   }
 });
 
-router.get('/silver/hourly-average-consumption', async (_req, res) => {
+async function sendHourlyAverageConsumption(_req, res) {
   try {
-    const rows = await getAverageConsumptionByHour();
-    res.json({ rows });
+    const dataset = await getAverageConsumptionByHour();
+    res.json(dataset);
   } catch (error) {
     if (error?.code === 'ENOENT') {
       res.status(404).json({ message: 'Hourly average consumption dataset not found' });
@@ -26,6 +26,9 @@ router.get('/silver/hourly-average-consumption', async (_req, res) => {
     console.error('Failed to read hourly average consumption dataset', error);
     res.status(500).json({ message: 'Failed to read hourly average consumption dataset' });
   }
-});
+}
+
+router.get('/gold/hourly-average-consumption', sendHourlyAverageConsumption);
+router.get('/silver/hourly-average-consumption', sendHourlyAverageConsumption);
 
 export default router;

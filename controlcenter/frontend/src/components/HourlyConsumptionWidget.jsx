@@ -27,6 +27,30 @@ function formatKwh(value) {
   return `${value.toFixed(2)} kWh`;
 }
 
+function formatTimestamp(timestamp) {
+  if (!timestamp) {
+    return null;
+  }
+
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+
+  return date.toLocaleString(undefined, {
+    dateStyle: 'short',
+    timeStyle: 'short'
+  });
+}
+
+function formatCount(value, singular, plural) {
+  if (!Number.isFinite(value) || value <= 0) {
+    return null;
+  }
+
+  return value === 1 ? `1 ${singular}` : `${value} ${plural}`;
+}
+
 function HourlyTooltip({ active, payload, label }) {
   if (!active || !payload?.length) {
     return null;
@@ -43,7 +67,7 @@ function HourlyTooltip({ active, payload, label }) {
 }
 
 export default function HourlyConsumptionWidget() {
-  const [data, setData] = useState([]);
+  const [dataset, setDataset] = useState({ rows: [], summary: null, generatedAt: null });
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -53,7 +77,7 @@ export default function HourlyConsumptionWidget() {
 
     try {
       const response = await fetch(
-        `${getApiBaseUrl()}/api/datalake/silver/hourly-average-consumption`
+        `${getApiBaseUrl()}/api/datalake/gold/hourly-average-consumption`
       );
 
       if (!response.ok) {
@@ -66,7 +90,11 @@ export default function HourlyConsumptionWidget() {
 
       const payload = await response.json();
       const rows = Array.isArray(payload.rows) ? payload.rows : [];
-      setData(rows);
+      setDataset({
+        rows,
+        summary: payload.summary ?? null,
+        generatedAt: payload.generatedAt ?? null
+      });
     } catch (err) {
       setError(err.message || 'Error inesperado al cargar el dataset.');
     } finally {
@@ -80,7 +108,7 @@ export default function HourlyConsumptionWidget() {
 
   const chartData = useMemo(
     () =>
-      data
+      dataset.rows
         .map((row) => ({
           hour: Number(row.hour),
           label: formatHourLabel(Number(row.hour)),
@@ -88,7 +116,26 @@ export default function HourlyConsumptionWidget() {
         }))
         .filter((row) => Number.isFinite(row.hour) && Number.isFinite(row.averageConsumption))
         .sort((a, b) => a.hour - b.hour),
-    [data]
+    [dataset.rows]
+  );
+
+  const summaryDetails = useMemo(() => {
+    if (!dataset.summary) {
+      return [];
+    }
+
+    const items = [
+      formatCount(dataset.summary.distinctContracts, 'contrato', 'contratos'),
+      formatCount(dataset.summary.distinctReadingDates, 'día de lectura', 'días de lectura'),
+      formatCount(dataset.summary.totalMeasurements, 'medición', 'mediciones')
+    ].filter(Boolean);
+
+    return items;
+  }, [dataset.summary]);
+
+  const generatedAtLabel = useMemo(
+    () => formatTimestamp(dataset.generatedAt),
+    [dataset.generatedAt]
   );
 
   const insights = useMemo(() => {
@@ -184,6 +231,21 @@ export default function HourlyConsumptionWidget() {
           </AreaChart>
         </ResponsiveContainer>
       </div>
+      {(generatedAtLabel || summaryDetails.length > 0) && (
+        <p className="hourly-footnote">
+          {generatedAtLabel && (
+            <>
+              Actualizado{' '}
+              <time dateTime={dataset.generatedAt || undefined}>{generatedAtLabel}</time>
+            </>
+          )}
+          {summaryDetails.length > 0 && (
+            <>
+              {generatedAtLabel ? ' · ' : ''}Basado en {summaryDetails.join(' · ')}.
+            </>
+          )}
+        </p>
+      )}
     </div>
   );
 }
