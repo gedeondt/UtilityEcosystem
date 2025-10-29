@@ -1,15 +1,15 @@
 # CRM Simulado
 
-Aplicación Node.js minimalista que simula el CRM de una comercializadora de energía. Genera datos en memoria de clientes, cuentas de facturación, puntos de suministro y contratos.
+Aplicación Node.js minimalista que simula el CRM de una comercializadora de energía. A partir de los pedidos publicados en el canal `ecommerce` del gestor de colas, crea en memoria los datos de clientes, cuentas de facturación, puntos de suministro y contratos.
 
 ## Uso
 
 ```bash
-node app.js [cantidad] [maximo]
+node app.js [maxEventosPorCiclo] [maximoClientes]
 ```
 
-- `cantidad` es opcional y define cuántos nuevos clientes (junto con su cuenta, punto y contrato) se generan cada 10 segundos. Por defecto se crea 1.
-- `maximo` es opcional y fija el límite total de clientes a generar. Cuando se alcanza, se detiene la generación automática.
+- `maxEventosPorCiclo` (opcional) establece el máximo de eventos que se procesarán en cada ciclo de polling. Por defecto no hay límite.
+- `maximoClientes` (opcional) fija el límite total de clientes a almacenar. Cuando se alcanza, se detiene el polling.
 
 La aplicación expone un servidor HTTP en el puerto `3000` (configurable mediante la variable de entorno `PORT`).
 
@@ -120,11 +120,13 @@ Devuelve los contratos que relacionan clientes, cuentas de facturación y puntos
 }
 ```
 
-## Datos generados
+## Integración con el gestor de colas
 
-Cada cliente generado incluye:
+- `CRM_EVENTLOG_ENDPOINT`: URL del endpoint `events` del gestor de colas (por defecto `http://localhost:3050/events`).
+- `CRM_ECOMMERCE_CHANNEL`: canal desde el que se reciben los pedidos (por defecto `ecommerce`).
+- `CRM_ECOMMERCE_POLL_INTERVAL_MS`: intervalo entre polls, en milisegundos (por defecto 5000).
+- `CRM_ECOMMERCE_MAX_PER_POLL`: máximo de eventos a procesar en cada ciclo (por defecto ilimitado).
+- `CRM_MAX_CLIENTS`: límite global de clientes almacenados (por defecto sin límite).
+- `TE_VERBOSE=true`: habilita trazas adicionales de depuración.
 
-- Datos personales y de contacto.
-- Cuenta de facturación vinculada, con IBAN, dirección y método de pago.
-- Punto de suministro asociado con CUPS, tipo de suministro y distribuidora.
-- Contrato vigente que relaciona los recursos anteriores, con información tarifaria y fechas.
+Cada pedido recibido debe contener la información del cliente, cuenta de facturación, punto de suministro y contrato. El CRM los añadirá a sus colecciones si aún no existen.
