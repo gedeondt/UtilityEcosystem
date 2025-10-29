@@ -168,18 +168,26 @@ async function downloadFromFtp(outputDir) {
 
 let pollingHandle = null;
 let shuttingDown = false;
+let currentCyclePromise = Promise.resolve();
 
 async function start(outputDir) {
   await purgeOutputDirectory(outputDir);
   await ensureDirectory(outputDir);
-  await downloadFromFtp(outputDir);
+  currentCyclePromise = downloadFromFtp(outputDir);
+  await currentCyclePromise;
   verboseInfo(
     `Scheduled recurring FTP ingestion every ${Math.round(intervalMs / 1000)} seconds.`
   );
+  if (shuttingDown) {
+    return;
+  }
   pollingHandle = setInterval(() => {
-    downloadFromFtp(outputDir).catch((error) => {
-      console.error('Error inesperado en el ciclo de ingesta del FTP:', error);
-    });
+    if (shuttingDown) {
+      return;
+    }
+    currentCyclePromise = currentCyclePromise
+      .catch(() => {})
+      .then(() => downloadFromFtp(outputDir));
   }, intervalMs);
 }
 
@@ -199,15 +207,22 @@ function setupSignalHandlers() {
 
       if (pollingHandle) {
         clearInterval(pollingHandle);
+        pollingHandle = null;
       }
 
-      purgeOutputDirectory(outputDir)
+      currentCyclePromise
         .catch((error) => {
-          console.error('No se pudo limpiar el directorio de ingesta del FTP:', error);
+          console.error('Error en el ciclo de ingesta del FTP durante el apagado:', error);
         })
-        .finally(() => {
-          process.exit(0);
-        });
+        .finally(() =>
+          purgeOutputDirectory(outputDir)
+            .catch((error) => {
+              console.error('No se pudo limpiar el directorio de ingesta del FTP:', error);
+            })
+            .finally(() => {
+              process.exit(0);
+            })
+        );
     });
   }
 }
