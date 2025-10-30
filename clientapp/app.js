@@ -1,6 +1,11 @@
 const http = require('http');
 const https = require('https');
 
+const { createVerboseLogger } = require('../lib/logger');
+const { slugify } = require('../lib/strings');
+const { toNumber } = require('../lib/numbers');
+const { createJsonRequester } = require('../lib/http');
+
 const EVENTLOG_ENDPOINT =
   process.env.CLIENTAPP_EVENTLOG_ENDPOINT || process.env.EVENTLOG_ENDPOINT || 'http://localhost:3050/events';
 const CRM_ENDPOINT = process.env.CLIENTAPP_CRM_ENDPOINT || 'http://localhost:3000/contracts';
@@ -26,13 +31,14 @@ const PAGE_SIZE = (() => {
   }
   return 100;
 })();
-const isVerbose = process.env.TE_VERBOSE === 'true';
-
 const eventlogUrl = new URL(EVENTLOG_ENDPOINT);
 const crmUrl = new URL(CRM_ENDPOINT);
 
 const eventlogHttpClient = eventlogUrl.protocol === 'https:' ? https : http;
 const crmHttpClient = crmUrl.protocol === 'https:' ? https : http;
+
+const requestEventlogJson = createJsonRequester(eventlogHttpClient);
+const requestCrmJson = createJsonRequester(crmHttpClient);
 
 const productCatalog = [
   { id: 'tarifa-plana-24h', name: 'Tarifa Plana 24h' },
@@ -40,84 +46,7 @@ const productCatalog = [
   { id: 'tarifa-nocturna', name: 'Tarifa Nocturna' }
 ];
 
-const verboseLog = (...args) => {
-  if (isVerbose) {
-    console.log('[clientapp]', ...args);
-  }
-};
-
-function toProductId(name) {
-  if (typeof name !== 'string') {
-    return null;
-  }
-  return name
-    .normalize('NFD')
-    .replace(/[^\p{Letter}\p{Number}\s-]/gu, '')
-    .trim()
-    .toLowerCase()
-    .replace(/[\s_]+/g, '-')
-    .replace(/-+/g, '-');
-}
-
-function toNumber(value) {
-  if (typeof value === 'number' && Number.isFinite(value)) {
-    return value;
-  }
-  if (typeof value === 'string' && value.trim().length > 0) {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : null;
-  }
-  return null;
-}
-
-function requestJson(client, url, { method = 'GET', body = null, headers = {} } = {}) {
-  return new Promise((resolve, reject) => {
-    const requestBody = body ? JSON.stringify(body) : null;
-    const req = client.request(
-      {
-        hostname: url.hostname,
-        port: url.port || (url.protocol === 'https:' ? 443 : 80),
-        path: `${url.pathname}${url.search}`,
-        method,
-        headers: {
-          Accept: 'application/json',
-          ...headers,
-          ...(requestBody
-            ? { 'Content-Type': 'application/json; charset=utf-8', 'Content-Length': Buffer.byteLength(requestBody) }
-            : {})
-        }
-      },
-      (res) => {
-        const chunks = [];
-        res.on('data', (chunk) => chunks.push(chunk));
-        res.on('end', () => {
-          const text = Buffer.concat(chunks).toString('utf8');
-          if (!res.statusCode || res.statusCode < 200 || res.statusCode >= 300) {
-            const error = new Error(`HTTP ${res.statusCode}`);
-            error.response = text;
-            reject(error);
-            return;
-          }
-          if (!text) {
-            resolve(null);
-            return;
-          }
-          try {
-            resolve(JSON.parse(text));
-          } catch (error) {
-            reject(new Error('Respuesta JSON inválida'));
-          }
-        });
-      }
-    );
-
-    req.on('error', (error) => reject(error));
-    if (requestBody) {
-      req.write(requestBody);
-    }
-    req.end();
-  });
-}
+const verboseLog = createVerboseLogger('clientapp');
 
 async function fetchAllContracts() {
   const contracts = [];
@@ -130,7 +59,7 @@ async function fetchAllContracts() {
 
     let response;
     try {
-      response = await requestJson(crmHttpClient, pageUrl);
+      response = await requestCrmJson(pageUrl);
     } catch (error) {
       console.error('No se pudo recuperar contratos del CRM:', error.message);
       return contracts;
@@ -182,7 +111,7 @@ function buildProductChangeEvent(contract) {
     return null;
   }
 
-  const currentProductId = contract.productId || toProductId(contract.tariff || '') || 'unknown';
+  const currentProductId = contract.productId || slugify(contract.tariff || '') || 'unknown';
   const currentProduct = productCatalog.find((product) => product.id === currentProductId) || {
     id: currentProductId,
     name: contract.tariff || 'Producto desconocido'
@@ -227,7 +156,7 @@ function buildProductChangeEvent(contract) {
 
 async function publishEvent(payload) {
   try {
-    await requestJson(eventlogHttpClient, eventlogUrl, {
+    await requestEventlogJson(eventlogUrl, {
       method: 'POST',
       body: { channel: CHANNEL, payload: JSON.stringify(payload) }
     });

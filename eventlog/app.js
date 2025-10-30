@@ -4,17 +4,15 @@ const fs = require('fs');
 const fsp = fs.promises;
 const path = require('path');
 
+const { createVerboseLogger } = require('../lib/logger');
+const { sendJson } = require('../lib/http');
+
 const PORT = process.env.EVENTLOG_PORT ? Number(process.env.EVENTLOG_PORT) : 3050;
 const HOST = process.env.EVENTLOG_HOST || '0.0.0.0';
 const BASE_URL = `http://localhost:${PORT}`;
 const LOG_ROOT = path.join(__dirname, 'log');
-const isVerbose = process.env.TE_VERBOSE === 'true';
 
-const verboseLog = (...args) => {
-  if (isVerbose) {
-    console.log('[eventlog]', ...args);
-  }
-};
+const verboseLog = createVerboseLogger('eventlog');
 
 async function ensureBaseDir() {
   await fsp.mkdir(LOG_ROOT, { recursive: true });
@@ -142,15 +140,6 @@ function readJsonBody(req) {
     });
     req.on('error', (error) => reject(error));
   });
-}
-
-function sendJson(res, statusCode, payload) {
-  const body = JSON.stringify(payload);
-  res.writeHead(statusCode, {
-    'Content-Type': 'application/json; charset=utf-8',
-    'Content-Length': Buffer.byteLength(body)
-  });
-  res.end(body);
 }
 
 function notFound(res) {

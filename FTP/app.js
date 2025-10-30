@@ -4,17 +4,14 @@ const { mkdir, rm, writeFile } = require('fs/promises');
 const { setInterval } = require('timers');
 const FtpSrv = require('ftp-srv');
 
+const { createVerboseLogger } = require('../lib/logger');
+
 const DEFAULT_FTP_PORT = 2121;
 const DEFAULT_POLL_INTERVAL = 60_000;
 const DEFAULT_PAGE_SIZE = 50;
 const DEFAULT_FTP_ROOT = path.join(__dirname, 'ftp-data');
 
-const isVerbose = process.env.TE_VERBOSE === 'true';
-const verboseLog = (...args) => {
-  if (isVerbose) {
-    console.log(...args);
-  }
-};
+const verboseLog = createVerboseLogger('ftp');
 
 function parseArgs(argv) {
   const options = {
