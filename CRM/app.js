@@ -27,7 +27,23 @@ const MAX_CLIENTS = (() => {
 })();
 const EVENTLOG_ENDPOINT = process.env.CRM_EVENTLOG_ENDPOINT || process.env.EVENTLOG_ENDPOINT || 'http://localhost:3050/events';
 const ECOMMERCE_CHANNEL = process.env.CRM_ECOMMERCE_CHANNEL || process.env.ECOMMERCE_CHANNEL || 'ecommerce';
+const CLIENTAPP_CHANNEL = process.env.CRM_CLIENTAPP_CHANNEL || 'clientapp';
 const INITIAL_FROM = process.env.CRM_ECOMMERCE_FROM || null;
+const CLIENTAPP_INITIAL_FROM = process.env.CRM_CLIENTAPP_FROM || null;
+const CLIENTAPP_POLL_INTERVAL_MS = (() => {
+  const envValue = Number(process.env.CRM_CLIENTAPP_POLL_INTERVAL_MS);
+  if (Number.isFinite(envValue) && envValue > 0) {
+    return Math.floor(envValue);
+  }
+  return 30_000;
+})();
+const CLIENTAPP_MAX_EVENTS_PER_POLL = (() => {
+  const envValue = Number(process.env.CRM_CLIENTAPP_MAX_PER_POLL);
+  if (Number.isFinite(envValue) && envValue > 0) {
+    return Math.floor(envValue);
+  }
+  return null;
+})();
 const isVerbose = process.env.TE_VERBOSE === 'true';
 
 const eventlogUrl = new URL(EVENTLOG_ENDPOINT);
@@ -121,6 +137,92 @@ function registerBundle(bundle) {
   return !isExistingClient;
 }
 
+function normalizeProductId(name) {
+  if (typeof name !== 'string') {
+    return null;
+  }
+  return name
+    .normalize('NFD')
+    .replace(/[^\p{Letter}\p{Number}\s-]/gu, '')
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_]+/g, '-')
+    .replace(/-+/g, '-');
+}
+
+function toNumber(value) {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === 'string' && value.trim().length > 0) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function applyProductChangeEvent(event) {
+  if (!event || event.eventType !== 'contract.product_change') {
+    return false;
+  }
+
+  const { contractId, product, pricing, effectiveAt } = event;
+  if (!contractId) {
+    return false;
+  }
+
+  const contract = contracts.find((item) => item.id === contractId);
+  if (!contract) {
+    verboseLog(`[clientapp] Evento para contrato desconocido ${contractId}.`);
+    return false;
+  }
+
+  let updated = false;
+
+  if (product && product.next) {
+    const nextId = product.next.id || normalizeProductId(product.next.name || '');
+    if (nextId) {
+      contract.productId = nextId;
+      updated = true;
+    }
+    if (typeof product.next.name === 'string' && product.next.name.trim().length > 0) {
+      contract.tariff = product.next.name.trim();
+      updated = true;
+    }
+  }
+
+  if (pricing) {
+    if (pricing.pricePerKWh) {
+      const nextPrice = toNumber(pricing.pricePerKWh.next);
+      if (nextPrice !== null) {
+        contract.pricePerKWh = Number(nextPrice.toFixed(4));
+        updated = true;
+      }
+    }
+    if (pricing.fixedFeeEurMonth) {
+      const nextFee = toNumber(pricing.fixedFeeEurMonth.next);
+      if (nextFee !== null) {
+        contract.fixedFeeEurMonth = Number(nextFee.toFixed(2));
+        updated = true;
+      }
+    }
+  }
+
+  if (!updated) {
+    return false;
+  }
+
+  const appliedAt = effectiveAt && !Number.isNaN(Date.parse(effectiveAt)) ? effectiveAt : new Date().toISOString();
+  contract.lastProductChangeAt = appliedAt;
+  contract.updatedAt = new Date().toISOString();
+
+  verboseLog(
+    `[clientapp] Actualizado contrato ${contract.id} a producto ${contract.tariff} (precio ${contract.pricePerKWh} €/kWh).`
+  );
+
+  return true;
+}
+
 function requestJson(url) {
   return new Promise((resolve, reject) => {
     const request = httpClient.request(
@@ -158,30 +260,35 @@ function requestJson(url) {
   });
 }
 
-let lastProcessedAt = INITIAL_FROM;
-let lastProcessedIds = new Set();
-let polling = false;
-let pollIntervalHandle = null;
+let ecommerceLastProcessedAt = INITIAL_FROM;
+let ecommerceLastProcessedIds = new Set();
+let ecommercePolling = false;
+let ecommercePollIntervalHandle = null;
+
+let clientappLastProcessedAt = CLIENTAPP_INITIAL_FROM;
+let clientappLastProcessedIds = new Set();
+let clientappPolling = false;
+let clientappPollIntervalHandle = null;
 
 async function pollEcommerce() {
-  if (polling) {
+  if (ecommercePolling) {
     return;
   }
   if (MAX_CLIENTS !== null && clients.length >= MAX_CLIENTS) {
-    if (pollIntervalHandle) {
-      clearInterval(pollIntervalHandle);
-      pollIntervalHandle = null;
+    if (ecommercePollIntervalHandle) {
+      clearInterval(ecommercePollIntervalHandle);
+      ecommercePollIntervalHandle = null;
     }
     verboseLog('Capacidad máxima alcanzada, deteniendo polling de e-commerce.');
     return;
   }
 
-  polling = true;
+  ecommercePolling = true;
   try {
     const url = new URL(eventlogUrl.toString());
     url.searchParams.set('channel', ECOMMERCE_CHANNEL);
-    if (lastProcessedAt) {
-      url.searchParams.set('from', lastProcessedAt);
+    if (ecommerceLastProcessedAt) {
+      url.searchParams.set('from', ecommerceLastProcessedAt);
     }
 
     const events = await requestJson(url);
@@ -189,11 +296,11 @@ async function pollEcommerce() {
       return;
     }
 
-    const lastTimestampMs = lastProcessedAt ? Date.parse(lastProcessedAt) : null;
+    const lastTimestampMs = ecommerceLastProcessedAt ? Date.parse(ecommerceLastProcessedAt) : null;
     const processedIdsForLatest = new Set(
       Number.isNaN(lastTimestampMs) || lastTimestampMs === null
         ? []
-        : Array.from(lastProcessedIds)
+        : Array.from(ecommerceLastProcessedIds)
     );
     let latestTimestampMs = Number.isNaN(lastTimestampMs) ? null : lastTimestampMs;
     let processedCount = 0;
@@ -212,13 +319,13 @@ async function pollEcommerce() {
         continue;
       }
 
-      if (lastProcessedAt) {
-        const lastTimestamp = Date.parse(lastProcessedAt);
+      if (ecommerceLastProcessedAt) {
+        const lastTimestamp = Date.parse(ecommerceLastProcessedAt);
         if (!Number.isNaN(lastTimestamp)) {
           if (eventTimestamp < lastTimestamp) {
             continue;
           }
-          if (eventTimestamp === lastTimestamp && lastProcessedIds.has(event.id)) {
+          if (eventTimestamp === lastTimestamp && ecommerceLastProcessedIds.has(event.id)) {
             continue;
           }
         }
@@ -245,14 +352,103 @@ async function pollEcommerce() {
     }
 
     if (processedCount > 0 && latestTimestampMs !== null) {
-      lastProcessedAt = new Date(latestTimestampMs).toISOString();
-      lastProcessedIds = processedIdsForLatest;
+      ecommerceLastProcessedAt = new Date(latestTimestampMs).toISOString();
+      ecommerceLastProcessedIds = processedIdsForLatest;
       verboseLog(`Procesados ${processedCount} evento(s) de e-commerce. Total clientes: ${clients.length}.`);
     }
   } catch (error) {
     console.error('Error durante el polling de e-commerce:', error.message);
   } finally {
-    polling = false;
+    ecommercePolling = false;
+  }
+}
+
+async function pollClientapp() {
+  if (clientappPolling) {
+    return;
+  }
+
+  clientappPolling = true;
+  try {
+    const url = new URL(eventlogUrl.toString());
+    url.searchParams.set('channel', CLIENTAPP_CHANNEL);
+    if (clientappLastProcessedAt) {
+      url.searchParams.set('from', clientappLastProcessedAt);
+    }
+
+    const events = await requestJson(url);
+    if (!Array.isArray(events) || events.length === 0) {
+      return;
+    }
+
+    const lastTimestampMs = clientappLastProcessedAt ? Date.parse(clientappLastProcessedAt) : null;
+    const processedIdsForLatest = new Set(
+      Number.isNaN(lastTimestampMs) || lastTimestampMs === null
+        ? []
+        : Array.from(clientappLastProcessedIds)
+    );
+    let latestTimestampMs = Number.isNaN(lastTimestampMs) ? null : lastTimestampMs;
+    let processedCount = 0;
+
+    for (const event of events) {
+      if (CLIENTAPP_MAX_EVENTS_PER_POLL !== null && processedCount >= CLIENTAPP_MAX_EVENTS_PER_POLL) {
+        break;
+      }
+
+      if (!event || typeof event.id !== 'string' || typeof event.createdAt !== 'string') {
+        continue;
+      }
+
+      const eventTimestamp = Date.parse(event.createdAt);
+      if (Number.isNaN(eventTimestamp)) {
+        continue;
+      }
+
+      if (clientappLastProcessedAt) {
+        const lastTimestamp = Date.parse(clientappLastProcessedAt);
+        if (!Number.isNaN(lastTimestamp)) {
+          if (eventTimestamp < lastTimestamp) {
+            continue;
+          }
+          if (eventTimestamp === lastTimestamp && clientappLastProcessedIds.has(event.id)) {
+            continue;
+          }
+        }
+      }
+
+      let payload;
+      try {
+        payload = JSON.parse(event.payload);
+      } catch (error) {
+        console.error('Payload de evento clientapp inválido. Ignorando.');
+        continue;
+      }
+
+      const applied = applyProductChangeEvent(payload);
+      if (!applied) {
+        continue;
+      }
+
+      processedCount += 1;
+
+      if (latestTimestampMs === null || eventTimestamp > latestTimestampMs) {
+        latestTimestampMs = eventTimestamp;
+        processedIdsForLatest.clear();
+        processedIdsForLatest.add(event.id);
+      } else if (eventTimestamp === latestTimestampMs) {
+        processedIdsForLatest.add(event.id);
+      }
+    }
+
+    if (processedCount > 0 && latestTimestampMs !== null) {
+      clientappLastProcessedAt = new Date(latestTimestampMs).toISOString();
+      clientappLastProcessedIds = processedIdsForLatest;
+      verboseLog(`Procesados ${processedCount} evento(s) de clientapp.`);
+    }
+  } catch (error) {
+    console.error('Error durante el polling de clientapp:', error.message);
+  } finally {
+    clientappPolling = false;
   }
 }
 
@@ -292,17 +488,30 @@ server.listen(PORT, () => {
     } evento(s) por ciclo).`
   );
   pollEcommerce();
-  pollIntervalHandle = setInterval(() => {
+  ecommercePollIntervalHandle = setInterval(() => {
     pollEcommerce();
   }, POLL_INTERVAL_MS);
+
+  verboseLog(
+    `Iniciando polling de clientapp cada ${Math.round(CLIENTAPP_POLL_INTERVAL_MS / 1000)} segundos (máx. ${
+      CLIENTAPP_MAX_EVENTS_PER_POLL === null ? 'sin límite' : CLIENTAPP_MAX_EVENTS_PER_POLL
+    } evento(s) por ciclo).`
+  );
+  pollClientapp();
+  clientappPollIntervalHandle = setInterval(() => {
+    pollClientapp();
+  }, CLIENTAPP_POLL_INTERVAL_MS);
 });
 
 const signals = ['SIGINT', 'SIGTERM'];
 signals.forEach((signal) => {
   process.on(signal, () => {
     console.log(`Recibida señal ${signal}, cerrando CRM...`);
-    if (pollIntervalHandle) {
-      clearInterval(pollIntervalHandle);
+    if (ecommercePollIntervalHandle) {
+      clearInterval(ecommercePollIntervalHandle);
+    }
+    if (clientappPollIntervalHandle) {
+      clearInterval(clientappPollIntervalHandle);
     }
     server.close(() => {
       process.exit(0);

@@ -11,6 +11,7 @@ Instala las dependencias de cada módulo (una sola vez) ejecutando desde la raí
 ```bash
 npm install --prefix CRM
 npm install --prefix ecommerce
+npm install --prefix clientapp
 npm install --prefix FTP
 npm install --prefix datalake/ingest
 npm install --prefix datalake/transform
@@ -41,11 +42,12 @@ El lanzador iniciará los servicios en el siguiente orden:
 1. Event Log
 2. CRM
 3. Emisor e-commerce
-4. Servidor FTP
-5. Ingesta del CRM
-6. Ingesta del FTP
-7. Transformación P5D → Parquet
-8. Control Center Backend
-9. Control Center Frontend
+4. Client App Simulator
+5. Servidor FTP
+6. Ingesta del CRM
+7. Ingesta del FTP
+8. Transformación P5D → Parquet
+9. Control Center Backend
+10. Control Center Frontend
 
 Cuando todos los servicios estén arriba se mostrará un mensaje de confirmación. Usa `Ctrl+C` para detener toda la plataforma; el lanzador enviará las señales necesarias para apagar cada servicio de forma ordenada.

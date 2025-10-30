@@ -37,6 +37,13 @@ const services = [
     readyRegex: /Emisor e-commerce activo\./
   },
   {
+    name: 'Client App',
+    cwd: path.join(rootDir, 'clientapp'),
+    command: 'node',
+    args: ['app.js'],
+    readyRegex: /Client App simulator activo/
+  },
+  {
     name: 'FTP',
     cwd: path.join(rootDir, 'FTP'),
     command: 'node',
