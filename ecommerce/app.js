@@ -54,6 +54,16 @@ function randomIban() {
   return `ES${Math.floor(10 + Math.random() * 89)}${Math.floor(1000 + Math.random() * 8999)}${Math.floor(1000 + Math.random() * 8999)}${Math.floor(1000 + Math.random() * 8999)}${Math.floor(1000 + Math.random() * 8999)}`;
 }
 
+function toProductId(name) {
+  return name
+    .normalize('NFD')
+    .replace(/[^\p{Letter}\p{Number}\s-]/gu, '')
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_]+/g, '-')
+    .replace(/-+/g, '-');
+}
+
 function buildOrderBundle() {
   const clientId = randomUUID();
   const billingAccountId = randomUUID();
@@ -106,12 +116,15 @@ function buildOrderBundle() {
   const endDate = new Date(startDate);
   endDate.setFullYear(startDate.getFullYear() + 1);
 
+  const tariffName = randomItem(tariffs);
+
   const contract = {
     id: contractId,
     clientId,
     billingAccountId,
     supplyPointId,
-    tariff: randomItem(tariffs),
+    productId: toProductId(tariffName),
+    tariff: tariffName,
     status: 'VIGENTE',
     pricePerKWh: Number((0.12 + Math.random() * 0.08).toFixed(4)),
     fixedFeeEurMonth: Number((5 + Math.random() * 10).toFixed(2)),
