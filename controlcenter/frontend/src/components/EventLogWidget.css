@@ -1,0 +1,119 @@
+.eventlog-widget {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  height: 100%;
+}
+
+.eventlog-summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: linear-gradient(135deg, rgba(236, 72, 153, 0.08), rgba(14, 165, 233, 0.08));
+  padding: 1rem 1.25rem;
+  border-radius: 1rem;
+}
+
+.eventlog-summary h3 {
+  margin: 0;
+  font-size: 1.75rem;
+  color: #db2777;
+}
+
+.eventlog-summary p {
+  margin: 0.25rem 0 0;
+  color: #475569;
+}
+
+.eventlog-summary span {
+  color: #0f172a;
+  font-weight: 600;
+  background: #ffffff;
+  padding: 0.5rem 0.75rem;
+  border-radius: 999px;
+  box-shadow: 0 10px 15px -12px rgba(15, 23, 42, 0.6);
+}
+
+.eventlog-updated {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: #64748b;
+  font-size: 0.9rem;
+}
+
+.eventlog-updated button {
+  border: none;
+  background: transparent;
+  color: #2563eb;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.eventlog-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.eventlog-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+  color: #334155;
+  font-weight: 500;
+}
+
+.eventlog-list li:last-child {
+  border-bottom: none;
+}
+
+.eventlog-channel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.eventlog-channel span:first-child {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.eventlog-count {
+  background: rgba(37, 99, 235, 0.1);
+  color: #1d4ed8;
+  border-radius: 0.75rem;
+  padding: 0.35rem 0.75rem;
+  font-weight: 600;
+  min-width: 90px;
+  text-align: center;
+}
+
+.widget-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  color: #475569;
+  height: 100%;
+}
+
+.widget-state--error {
+  color: #dc2626;
+}
+
+.widget-state--error button {
+  background: #dc2626;
+  border: none;
+  color: #f8fafc;
+  padding: 0.5rem 1rem;
+  border-radius: 0.75rem;
+  cursor: pointer;
+}
