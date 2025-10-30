@@ -2,6 +2,10 @@ const http = require('http');
 const https = require('https');
 const { randomUUID } = require('crypto');
 
+const { createVerboseLogger } = require('../lib/logger');
+const { slugify } = require('../lib/strings');
+const { createJsonRequester } = require('../lib/http');
+
 const EVENTLOG_ENDPOINT = process.env.EVENTLOG_ENDPOINT || 'http://localhost:3050/events';
 const CHANNEL = process.env.ECOMMERCE_CHANNEL || 'ecommerce';
 const EMIT_INTERVAL_MS = (() => {
@@ -19,10 +23,9 @@ const MAX_ORDERS = (() => {
   const arg = Number(process.argv[3]);
   return Number.isFinite(arg) && arg > 0 ? Math.floor(arg) : null;
 })();
-const isVerbose = process.env.TE_VERBOSE === 'true';
-
 const eventlogUrl = new URL(EVENTLOG_ENDPOINT);
 const httpClient = eventlogUrl.protocol === 'https:' ? https : http;
+const requestEventlogJson = createJsonRequester(httpClient);
 
 const firstNames = ['María', 'Luis', 'Ana', 'Javier', 'Lucía', 'Carlos', 'Laura', 'Pablo'];
 const lastNames = ['García', 'Martínez', 'López', 'Sánchez', 'Pérez', 'Gómez'];
@@ -31,11 +34,7 @@ const cities = ['Madrid', 'Barcelona', 'Valencia', 'Sevilla', 'Bilbao'];
 const tariffs = ['Tarifa Plana 24h', 'Tarifa Horaria', 'Tarifa Nocturna'];
 const supplyTypes = ['Electricidad', 'Gas'];
 
-const verboseLog = (...args) => {
-  if (isVerbose) {
-    console.log('[ecommerce]', ...args);
-  }
-};
+const verboseLog = createVerboseLogger('ecommerce');
 
 function randomItem(list) {
   return list[Math.floor(Math.random() * list.length)];
@@ -52,16 +51,6 @@ function randomTaxId() {
 
 function randomIban() {
   return `ES${Math.floor(10 + Math.random() * 89)}${Math.floor(1000 + Math.random() * 8999)}${Math.floor(1000 + Math.random() * 8999)}${Math.floor(1000 + Math.random() * 8999)}${Math.floor(1000 + Math.random() * 8999)}`;
-}
-
-function toProductId(name) {
-  return name
-    .normalize('NFD')
-    .replace(/[^\p{Letter}\p{Number}\s-]/gu, '')
-    .trim()
-    .toLowerCase()
-    .replace(/[\s_]+/g, '-')
-    .replace(/-+/g, '-');
 }
 
 function buildOrderBundle() {
@@ -123,7 +112,7 @@ function buildOrderBundle() {
     clientId,
     billingAccountId,
     supplyPointId,
-    productId: toProductId(tariffName),
+    productId: slugify(tariffName),
     tariff: tariffName,
     status: 'VIGENTE',
     pricePerKWh: Number((0.12 + Math.random() * 0.08).toFixed(4)),
@@ -144,49 +133,6 @@ function buildOrderBundle() {
   };
 }
 
-function postJson(body) {
-  return new Promise((resolve, reject) => {
-    const payload = JSON.stringify(body);
-    const request = httpClient.request(
-      {
-        hostname: eventlogUrl.hostname,
-        port: eventlogUrl.port || (eventlogUrl.protocol === 'https:' ? 443 : 80),
-        path: eventlogUrl.pathname + eventlogUrl.search,
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json; charset=utf-8',
-          'Content-Length': Buffer.byteLength(payload)
-        }
-      },
-      (res) => {
-        const chunks = [];
-        res.on('data', (chunk) => chunks.push(chunk));
-        res.on('end', () => {
-          const responseText = Buffer.concat(chunks).toString('utf8');
-          if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
-            try {
-              resolve(JSON.parse(responseText || '{}'));
-            } catch (error) {
-              resolve({});
-            }
-            return;
-          }
-          const error = new Error(`Event Log respondió con código ${res.statusCode}`);
-          error.response = responseText;
-          reject(error);
-        });
-      }
-    );
-
-    request.on('error', (error) => {
-      reject(error);
-    });
-
-    request.write(payload);
-    request.end();
-  });
-}
-
 let totalOrdersSent = 0;
 let intervalHandle = null;
 
@@ -205,7 +151,10 @@ async function emitOrders(count) {
   for (let i = 0; i < toEmit; i += 1) {
     const bundle = buildOrderBundle();
     try {
-      await postJson({ channel: CHANNEL, payload: JSON.stringify(bundle) });
+      await requestEventlogJson(eventlogUrl, {
+        method: 'POST',
+        body: { channel: CHANNEL, payload: JSON.stringify(bundle) }
+      });
       totalOrdersSent += 1;
       verboseLog(`Pedido ${bundle.orderId} publicado (${totalOrdersSent} total).`);
     } catch (error) {
