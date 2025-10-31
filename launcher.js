@@ -258,14 +258,18 @@ async function shutdown() {
   for (const child of runningProcesses) {
     killPromises.push(
       new Promise((resolve) => {
-        child.once('exit', () => resolve());
-        if (process.platform === 'win32') {
-          child.kill('SIGTERM');
-        } else {
-          child.kill('SIGINT');
-        }
-        setTimeout(() => {
-          if (!child.killed) {
+        const preferredSignal = process.platform === 'win32' ? 'SIGTERM' : 'SIGINT';
+        const onExit = () => {
+          clearTimeout(forceKillTimer);
+          resolve();
+        };
+
+        child.once('exit', onExit);
+        child.kill(preferredSignal);
+
+        const forceKillTimer = setTimeout(() => {
+          if (child.exitCode === null && child.signalCode === null) {
+            log('El subproceso no respondió a la señal de apagado. Forzando cierre...');
             child.kill('SIGKILL');
           }
         }, 5000);
