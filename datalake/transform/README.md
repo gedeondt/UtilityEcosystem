@@ -18,3 +18,10 @@ Cada script indica claramente el origen de los datos, el formato de lectura y el
 - **Destino:** `../data/gold/controlcenter/hourly_average_consumption.json` (estadística agregada en formato JSON para el panel de control).
 - **Propósito:** calcula el consumo medio horario, el número de medidas consideradas y el recuento de contratos/días involucrados y publica el resultado en la capa *gold*.
 - **Invocación:** `node p5d_hourly_consumption_to_json.js [--input <file>] [--output <file>] [--interval-ms <ms>] [--once]`.
+
+### `crm_entities_to_bronze.js`
+
+- **Origen:** `../data/landing/crm/<timestamp>/*.json` (instantáneas generadas por `crm_ingest.js`).
+- **Destino:** `../data/bronce/crm/<entidad>_latest.json` (representación consolidada del estado actual de cada entidad del CRM).
+- **Propósito:** mantener sincronizado el estado del CRM en la capa *bronze* tomando siempre la última instantánea disponible.
+- **Invocación:** `node crm_entities_to_bronze.js [LANDING_DIR] [OUTPUT_DIR] [INTERVAL_MS]`.

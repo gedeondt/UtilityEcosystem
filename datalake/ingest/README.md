@@ -9,7 +9,7 @@ Cada script indica la fuente de datos que consulta, el formato que consume y dó
 
 - **Origen:** API REST del servicio CRM (`/customers`).
 - **Formato leído:** JSON devuelto por el endpoint del CRM.
-- **Destino:** `../data/landing/crm/<timestamp>.json` (una instantánea por ciclo de ingesta con el listado de clientes y sus contratos).
+- **Destino:** `../data/landing/crm/<timestamp>/<entidad>.json` (una carpeta por instantánea que agrupa todas las entidades consultadas en el mismo ciclo).
 - **Comportamiento:** ejecuta peticiones periódicas (intervalo configurable mediante `CRM_POLL_INTERVAL_MS`) y almacena la respuesta formateada en la zona de *landing* sin transformaciones adicionales.
 
 ### `ftp_ingest.js`

@@ -7,12 +7,13 @@ Este módulo define la estructura básica del datalake y los procesos de ingesta
 - `data/`
   - `bronce/`, `silver/`, `gold/`: capas principales del datalake. Permanecen vacías en el repositorio y se generan dinámicamente en ejecución.
   - `landing/`: zona de aterrizaje utilizada por los procesos de ingesta.
-    - `crm/`: almacena los ficheros JSON recibidos del servicio CRM.
+    - `crm/`: almacena instantáneas completas del servicio CRM organizadas por carpeta y timestamp (`<timestamp>/<entidad>.json`).
     - `ftp/`: almacena los ficheros descargados desde el servidor FTP.
 - `ingest/`: scripts Node.js que ejecutan los procesos de ingesta.
 - `transform/`: scripts Node.js encargados de refinar los datasets hacia capas superiores.
   - `p5d_to_parquet.js`: transforma ficheros P5D (`landing/ftp`) en un Parquet *silver* (`silver/p5d/p5d_readings.parquet`).
   - `p5d_hourly_consumption_to_json.js`: consulta el Parquet *silver* de consumos horarios y publica un JSON *gold* (`gold/controlcenter/hourly_average_consumption.json`) con la estadística usada por el panel de control.
+  - `crm_entities_to_bronze.js`: toma la instantánea más reciente del CRM en *landing* y actualiza los datasets *bronze* en `bronce/crm/*_latest.json` para cada entidad disponible.
 
 ## Ejecución de los procesos
 
@@ -33,7 +34,7 @@ Variables de entorno soportadas:
 
 - `CRM_SERVICE_URL` (obligatoria si no se pasa como argumento)
 - `CRM_OUTPUT_DIR` (ruta donde se depositarán los JSON)
-- `CRM_POLL_INTERVAL_MS` (milisegundos entre ejecuciones, por defecto 180000)
+- `CRM_POLL_INTERVAL_MS` (milisegundos entre ejecuciones, por defecto 300000)
 
 El script consulta al servicio CRM y guarda la respuesta tal y como llega. Si la respuesta es JSON válido, se formatea para facilitar su lectura.
 
@@ -55,4 +56,4 @@ Variables de entorno soportadas:
 
 Cada ciclo descarga los ficheros disponibles en el FTP al directorio de aterrizaje, eliminando del servidor únicamente aquellos que se han descargado correctamente.
 
-Ambos scripts se ejecutan de manera continua, repitiendo el ciclo cada tres minutos (configurable) y dejando los procesos en ejecución.
+Ambos scripts se ejecutan de manera continua, repitiendo el ciclo cada cinco minutos (configurable) y dejando los procesos en ejecución.

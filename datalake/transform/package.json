@@ -5,7 +5,8 @@
   "type": "commonjs",
   "private": true,
   "scripts": {
-    "start:p5d": "node p5d_to_parquet.js"
+    "start:p5d": "node p5d_to_parquet.js",
+    "start:crm": "node crm_entities_to_bronze.js"
   },
   "dependencies": {
     "@dsnp/parquetjs": "^1.6.0",

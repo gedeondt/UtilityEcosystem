@@ -2,7 +2,7 @@ const fetch = require('node-fetch');
 const fs = require('fs');
 const path = require('path');
 
-const DEFAULT_INTERVAL_MS = 3 * 60 * 1000;
+const DEFAULT_INTERVAL_MS = 5 * 60 * 1000;
 const CRM_ENDPOINTS = Object.freeze([
   '/clients',
   '/billing-accounts',
@@ -108,12 +108,9 @@ async function fetchAllEndpointData(endpointPath) {
   };
 }
 
-async function persistEndpointData(endpointPath, payload, timestamp) {
+async function persistEndpointData(endpointPath, payload, timestamp, snapshotDir) {
   const endpointName = sanitiseEndpointName(endpointPath);
-  const entityDir = path.join(outputDir, endpointName);
-  await ensureDirectory(entityDir);
-
-  const filePath = path.join(entityDir, `${endpointName}-${timestamp}.json`);
+  const filePath = path.join(snapshotDir, `${endpointName}.json`);
   const filePayload = {
     fetchedAt: timestamp,
     endpoint: endpointPath,
@@ -129,12 +126,14 @@ async function persistEndpointData(endpointPath, payload, timestamp) {
 async function fetchCrmData(endpoints) {
   const runStartedAt = new Date();
   const timestamp = runStartedAt.toISOString().replace(/[.:]/g, '-');
-  console.info(`Starting CRM ingestion cycle at ${runStartedAt.toISOString()}...`);
+  const snapshotDir = path.join(outputDir, timestamp);
+  await ensureDirectory(snapshotDir);
+  console.info(`Starting CRM ingestion cycle at ${runStartedAt.toISOString()} (snapshot ${snapshotDir})...`);
 
   for (const endpointPath of endpoints) {
     try {
       const payload = await fetchAllEndpointData(endpointPath);
-      await persistEndpointData(endpointPath, payload, timestamp);
+      await persistEndpointData(endpointPath, payload, timestamp, snapshotDir);
     } catch (error) {
       console.error(`Failed to ingest data for ${endpointPath}:`, error);
     }
