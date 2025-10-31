@@ -3,6 +3,7 @@ import DashboardLayout from './layout/DashboardLayout.jsx';
 import DatalakeWidget from './components/DatalakeWidget.jsx';
 import EventLogWidget from './components/EventLogWidget.jsx';
 import HourlyConsumptionWidget from './components/HourlyConsumptionWidget.jsx';
+import CustomersByProductWidget from './components/CustomersByProductWidget.jsx';
 import WidgetCard from './components/WidgetCard.jsx';
 import './App.css';
 
@@ -33,8 +34,14 @@ const dashboardPages = [
     label: 'Data marts',
     headerTitle: 'Data marts',
     headerDescription:
-      'Consulta las métricas agregadas que generamos en la capa gold, como el consumo medio por hora.',
+      'Consulta las métricas agregadas que generamos en la capa gold, como la base de clientes por producto o el consumo medio por hora.',
     widgets: [
+      {
+        id: 'customers-by-product',
+        title: 'Clientes por producto del CRM',
+        description: 'Distribución de clientes y contratos por cada producto comercializado',
+        component: CustomersByProductWidget,
+      },
       {
         id: 'hourly-consumption',
         title: 'Consumo medio de clientes por hora',

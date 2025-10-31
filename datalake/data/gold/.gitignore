@@ -1,2 +1,5 @@
 *
 !.gitignore
+!controlcenter/
+controlcenter/*
+!controlcenter/customers_by_product.json

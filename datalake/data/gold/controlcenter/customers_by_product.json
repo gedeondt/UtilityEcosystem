@@ -1,0 +1,38 @@
+{
+  "generatedAt": "2024-04-10T08:30:00.000Z",
+  "source": {
+    "bronzeFile": "../../bronce/crm/contracts_latest.json",
+    "snapshot": "20240410T083000Z",
+    "refreshedAt": "2024-04-10T08:30:00.000Z",
+    "totalItems": 5
+  },
+  "summary": {
+    "totalProducts": 2,
+    "totalContracts": 5,
+    "distinctClients": 4,
+    "activeContracts": 4,
+    "inactiveContracts": 1
+  },
+  "rows": [
+    {
+      "productId": "tarifa-plana-24h",
+      "productName": "Tarifa Plana 24h",
+      "clientCount": 3,
+      "contractCount": 3,
+      "activeContractCount": 3,
+      "inactiveContractCount": 0,
+      "averagePricePerKwh": 0.1425,
+      "averageFixedFeeEurMonth": 12.5
+    },
+    {
+      "productId": "tarifa-nocturna",
+      "productName": "Tarifa Nocturna",
+      "clientCount": 1,
+      "contractCount": 2,
+      "activeContractCount": 1,
+      "inactiveContractCount": 1,
+      "averagePricePerKwh": 0.1187,
+      "averageFixedFeeEurMonth": 9.8
+    }
+  ]
+}

@@ -1,5 +1,9 @@
 import { Router } from 'express';
-import { getAverageConsumptionByHour, getDatalakeFolderStats } from '../services/datalakeService.js';
+import {
+  getAverageConsumptionByHour,
+  getCustomersByProduct,
+  getDatalakeFolderStats
+} from '../services/datalakeService.js';
 
 const router = Router();
 
@@ -30,5 +34,20 @@ async function sendHourlyAverageConsumption(_req, res) {
 
 router.get('/gold/hourly-average-consumption', sendHourlyAverageConsumption);
 router.get('/silver/hourly-average-consumption', sendHourlyAverageConsumption);
+
+router.get('/gold/customers-by-product', async (_req, res) => {
+  try {
+    const dataset = await getCustomersByProduct();
+    res.json(dataset);
+  } catch (error) {
+    if (error?.code === 'ENOENT') {
+      res.status(404).json({ message: 'Customers by product dataset not found' });
+      return;
+    }
+
+    console.error('Failed to read customers by product dataset', error);
+    res.status(500).json({ message: 'Failed to read customers by product dataset' });
+  }
+});
 
 export default router;
