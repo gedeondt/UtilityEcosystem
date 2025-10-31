@@ -14,6 +14,7 @@ Este módulo define la estructura básica del datalake y los procesos de ingesta
   - `p5d_to_parquet.js`: transforma ficheros P5D (`landing/ftp`) en un Parquet *silver* (`silver/p5d/p5d_readings.parquet`).
   - `p5d_hourly_consumption_to_json.js`: consulta el Parquet *silver* de consumos horarios y publica un JSON *gold* (`gold/controlcenter/hourly_average_consumption.json`) con la estadística usada por el panel de control.
   - `crm_entities_to_bronze.js`: toma la instantánea más reciente del CRM en *landing* y actualiza los datasets *bronze* en `bronce/crm/*_latest.json` para cada entidad disponible.
+  - `crm_clients_by_product_to_json.js`: agrega los contratos del CRM en *bronze* y genera un dataset *gold* (`gold/controlcenter/customers_by_product.json`) con métricas de clientes por producto.
 
 ## Ejecución de los procesos
 
