@@ -5,32 +5,19 @@ const { createVerboseLogger } = require('../lib/logger');
 const { slugify } = require('../lib/strings');
 const { toNumber } = require('../lib/numbers');
 const { createJsonRequester } = require('../lib/http');
+const {
+  parseArgs,
+  getRequiredString,
+  getRequiredPositiveInteger
+} = require('../lib/cli');
 
-const EVENTLOG_ENDPOINT =
-  process.env.CLIENTAPP_EVENTLOG_ENDPOINT || process.env.EVENTLOG_ENDPOINT || 'http://localhost:3050/events';
-const CRM_ENDPOINT = process.env.CLIENTAPP_CRM_ENDPOINT || 'http://localhost:3000/contracts';
-const CHANNEL = process.env.CLIENTAPP_CHANNEL || 'clientapp';
-const INTERVAL_MS = (() => {
-  const envValue = Number(process.env.CLIENTAPP_INTERVAL_MS);
-  if (Number.isFinite(envValue) && envValue > 0) {
-    return Math.floor(envValue);
-  }
-  return 30_000;
-})();
-const MAX_UPDATES = (() => {
-  const envValue = Number(process.env.CLIENTAPP_MAX_UPDATES);
-  if (Number.isFinite(envValue) && envValue > 0) {
-    return Math.floor(envValue);
-  }
-  return 5;
-})();
-const PAGE_SIZE = (() => {
-  const envValue = Number(process.env.CLIENTAPP_PAGE_SIZE);
-  if (Number.isFinite(envValue) && envValue > 0) {
-    return Math.floor(envValue);
-  }
-  return 100;
-})();
+const cliOptions = parseArgs(process.argv);
+const EVENTLOG_ENDPOINT = getRequiredString(cliOptions, 'eventlog-endpoint');
+const CRM_ENDPOINT = getRequiredString(cliOptions, 'crm-endpoint');
+const CHANNEL = getRequiredString(cliOptions, 'channel');
+const INTERVAL_MS = getRequiredPositiveInteger(cliOptions, 'interval-ms');
+const MAX_UPDATES = getRequiredPositiveInteger(cliOptions, 'max-updates');
+const PAGE_SIZE = getRequiredPositiveInteger(cliOptions, 'page-size');
 const eventlogUrl = new URL(EVENTLOG_ENDPOINT);
 const crmUrl = new URL(CRM_ENDPOINT);
 

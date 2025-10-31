@@ -2,7 +2,6 @@ const fetch = require('node-fetch');
 const fs = require('fs');
 const path = require('path');
 
-const DEFAULT_INTERVAL_MS = 5 * 60 * 1000;
 const CRM_ENDPOINTS = Object.freeze([
   '/clients',
   '/billing-accounts',
@@ -10,10 +9,16 @@ const CRM_ENDPOINTS = Object.freeze([
   '/contracts'
 ]);
 
-const serviceUrl = process.env.CRM_SERVICE_URL || process.argv[2];
-const outputDir =
-  process.env.CRM_OUTPUT_DIR || process.argv[3] || path.resolve(__dirname, '..', 'data', 'landing', 'crm');
-const intervalMs = Number(process.env.CRM_POLL_INTERVAL_MS || process.argv[4] || DEFAULT_INTERVAL_MS);
+const {
+  parseArgs,
+  getRequiredString,
+  getRequiredPositiveInteger
+} = require('../../lib/cli');
+
+const cliOptions = parseArgs(process.argv);
+const serviceUrl = getRequiredString(cliOptions, 'service-url');
+const outputDir = path.resolve(getRequiredString(cliOptions, 'output-dir'));
+const intervalMs = getRequiredPositiveInteger(cliOptions, 'interval-ms');
 
 const isVerbose = process.env.TE_VERBOSE === 'true';
 const verboseInfo = (...args) => {
@@ -21,11 +26,6 @@ const verboseInfo = (...args) => {
     console.info(...args);
   }
 };
-
-if (!serviceUrl) {
-  console.error('CRM service URL must be provided via CRM_SERVICE_URL env var or first CLI argument.');
-  process.exit(1);
-}
 
 if (!Number.isFinite(intervalMs) || intervalMs <= 0) {
   console.error('Polling interval must be a positive number of milliseconds.');

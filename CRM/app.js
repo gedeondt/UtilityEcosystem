@@ -3,21 +3,31 @@ const https = require('https');
 
 const { createVerboseLogger } = require('../lib/logger');
 const { slugify } = require('../lib/strings');
-const { toNumber, toPositiveInteger } = require('../lib/numbers');
+const { toNumber } = require('../lib/numbers');
 const { createJsonRequester, sendJson } = require('../lib/http');
+const {
+  parseArgs,
+  getRequiredString,
+  getRequiredStringOrNull,
+  getRequiredPositiveInteger,
+  getRequiredPositiveIntegerOrNull
+} = require('../lib/cli');
 
-const PORT = process.env.PORT ? Number(process.env.PORT) : 3000;
-const POLL_INTERVAL_MS = toPositiveInteger(process.env.CRM_ECOMMERCE_POLL_INTERVAL_MS) ?? 5_000;
-const MAX_EVENTS_PER_POLL =
-  toPositiveInteger(process.env.CRM_ECOMMERCE_MAX_PER_POLL) ?? toPositiveInteger(process.argv[2]) ?? null;
-const MAX_CLIENTS = toPositiveInteger(process.env.CRM_MAX_CLIENTS) ?? toPositiveInteger(process.argv[3]) ?? null;
-const EVENTLOG_ENDPOINT = process.env.CRM_EVENTLOG_ENDPOINT || process.env.EVENTLOG_ENDPOINT || 'http://localhost:3050/events';
-const ECOMMERCE_CHANNEL = process.env.CRM_ECOMMERCE_CHANNEL || process.env.ECOMMERCE_CHANNEL || 'ecommerce';
-const CLIENTAPP_CHANNEL = process.env.CRM_CLIENTAPP_CHANNEL || 'clientapp';
-const INITIAL_FROM = process.env.CRM_ECOMMERCE_FROM || null;
-const CLIENTAPP_INITIAL_FROM = process.env.CRM_CLIENTAPP_FROM || null;
-const CLIENTAPP_POLL_INTERVAL_MS = toPositiveInteger(process.env.CRM_CLIENTAPP_POLL_INTERVAL_MS) ?? 30_000;
-const CLIENTAPP_MAX_EVENTS_PER_POLL = toPositiveInteger(process.env.CRM_CLIENTAPP_MAX_PER_POLL) ?? null;
+const cliOptions = parseArgs(process.argv);
+const PORT = getRequiredPositiveInteger(cliOptions, 'port');
+const POLL_INTERVAL_MS = getRequiredPositiveInteger(cliOptions, 'ecommerce-poll-interval-ms');
+const MAX_EVENTS_PER_POLL = getRequiredPositiveIntegerOrNull(cliOptions, 'ecommerce-max-events-per-poll');
+const MAX_CLIENTS = getRequiredPositiveIntegerOrNull(cliOptions, 'max-clients');
+const EVENTLOG_ENDPOINT = getRequiredString(cliOptions, 'eventlog-endpoint');
+const ECOMMERCE_CHANNEL = getRequiredString(cliOptions, 'ecommerce-channel');
+const CLIENTAPP_CHANNEL = getRequiredString(cliOptions, 'clientapp-channel');
+const INITIAL_FROM = getRequiredStringOrNull(cliOptions, 'ecommerce-from');
+const CLIENTAPP_INITIAL_FROM = getRequiredStringOrNull(cliOptions, 'clientapp-from');
+const CLIENTAPP_POLL_INTERVAL_MS = getRequiredPositiveInteger(cliOptions, 'clientapp-poll-interval-ms');
+const CLIENTAPP_MAX_EVENTS_PER_POLL = getRequiredPositiveIntegerOrNull(
+  cliOptions,
+  'clientapp-max-events-per-poll'
+);
 
 const eventlogUrl = new URL(EVENTLOG_ENDPOINT);
 const httpClient = eventlogUrl.protocol === 'https:' ? https : http;
