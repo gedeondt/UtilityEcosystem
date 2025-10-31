@@ -6,11 +6,14 @@ const path = require('path');
 
 const { createVerboseLogger } = require('../lib/logger');
 const { sendJson } = require('../lib/http');
+const { parseArgs, getRequiredString, getRequiredPositiveInteger } = require('../lib/cli');
 
-const PORT = process.env.EVENTLOG_PORT ? Number(process.env.EVENTLOG_PORT) : 3050;
-const HOST = process.env.EVENTLOG_HOST || '0.0.0.0';
-const BASE_URL = `http://localhost:${PORT}`;
-const LOG_ROOT = path.join(__dirname, 'log');
+const cliOptions = parseArgs(process.argv);
+const HOST = getRequiredString(cliOptions, 'host');
+const PORT = getRequiredPositiveInteger(cliOptions, 'port');
+const LOG_ROOT = path.resolve(getRequiredString(cliOptions, 'log-root'));
+const BASE_URL_HOST = HOST === '0.0.0.0' ? 'localhost' : HOST;
+const BASE_URL = `http://${BASE_URL_HOST}:${PORT}`;
 
 const verboseLog = createVerboseLogger('eventlog');
 

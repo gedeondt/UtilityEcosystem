@@ -2,19 +2,18 @@ const ftp = require('basic-ftp');
 const fs = require('fs');
 const path = require('path');
 
-const DEFAULT_INTERVAL_MS = 3 * 60 * 1000;
-const DEFAULT_FTP_PORT = 2121;
-const DEFAULT_REMOTE_DIR = '/';
+const {
+  parseArgs,
+  getRequiredString,
+  getRequiredPositiveInteger
+} = require('../../lib/cli');
 
-const [, , cliHost, cliPort, cliOutputDir, cliInterval] = process.argv;
-
-const ftpHost = process.env.FTP_HOST || cliHost;
-const ftpPortValue = process.env.FTP_PORT || cliPort;
-const ftpPort = ftpPortValue ? Number(ftpPortValue) : DEFAULT_FTP_PORT;
-const ftpRemoteDir = process.env.FTP_REMOTE_DIR || DEFAULT_REMOTE_DIR;
-const outputDir = process.env.FTP_OUTPUT_DIR || cliOutputDir || path.resolve(__dirname, '..', 'data', 'landing', 'ftp');
-const configuredInterval = process.env.FTP_POLL_INTERVAL_MS || cliInterval;
-const intervalMs = configuredInterval ? Number(configuredInterval) : DEFAULT_INTERVAL_MS;
+const cliOptions = parseArgs(process.argv);
+const ftpHost = getRequiredString(cliOptions, 'host');
+const ftpPort = getRequiredPositiveInteger(cliOptions, 'port');
+const ftpRemoteDir = getRequiredString(cliOptions, 'remote-dir');
+const outputDir = path.resolve(getRequiredString(cliOptions, 'output-dir'));
+const intervalMs = getRequiredPositiveInteger(cliOptions, 'interval-ms');
 
 const isVerbose = process.env.TE_VERBOSE === 'true';
 const verboseInfo = (...args) => {
@@ -22,16 +21,6 @@ const verboseInfo = (...args) => {
     console.info(...args);
   }
 };
-
-if (!ftpHost) {
-  console.error('FTP host must be provided via FTP_HOST env var or first CLI argument.');
-  process.exit(1);
-}
-
-if (!Number.isInteger(ftpPort) || ftpPort <= 0) {
-  console.error('FTP port must be a positive integer.');
-  process.exit(1);
-}
 
 if (!Number.isFinite(intervalMs) || intervalMs <= 0) {
   console.error('Polling interval must be a positive number of milliseconds.');
@@ -85,7 +74,7 @@ async function downloadFromFtp(outputDir) {
 
     verboseInfo('Connection to FTP server established.');
 
-    if (ftpRemoteDir && ftpRemoteDir !== DEFAULT_REMOTE_DIR) {
+    if (ftpRemoteDir && ftpRemoteDir !== '/') {
       verboseInfo(`Changing remote directory to ${ftpRemoteDir}`);
       await client.cd(ftpRemoteDir);
     } else {

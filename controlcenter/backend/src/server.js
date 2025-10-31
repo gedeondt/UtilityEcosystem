@@ -4,7 +4,15 @@ import datalakeRouter from './routes/datalake.js';
 import eventlogRouter from './routes/eventlog.js';
 
 const app = express();
-const PORT = process.env.PORT || 4000;
+const rawPort = process.env.PORT;
+if (!rawPort) {
+  throw new Error('Environment variable PORT is required.');
+}
+
+const PORT = Number(rawPort);
+if (!Number.isInteger(PORT) || PORT <= 0) {
+  throw new Error('Environment variable PORT must be a positive integer.');
+}
 
 app.use(cors());
 app.use(express.json());

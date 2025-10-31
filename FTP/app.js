@@ -5,75 +5,21 @@ const { setInterval } = require('timers');
 const FtpSrv = require('ftp-srv');
 
 const { createVerboseLogger } = require('../lib/logger');
+const {
+  parseArgs,
+  getRequiredString,
+  getRequiredPositiveInteger
+} = require('../lib/cli');
 
-const DEFAULT_FTP_PORT = 2121;
-const DEFAULT_POLL_INTERVAL = 60_000;
-const DEFAULT_PAGE_SIZE = 50;
-const DEFAULT_FTP_ROOT = path.join(__dirname, 'ftp-data');
+const cliOptions = parseArgs(process.argv);
+const CRM_HOST = getRequiredString(cliOptions, 'crm-host');
+const CRM_PORT = getRequiredPositiveInteger(cliOptions, 'crm-port');
+const FTP_PORT = getRequiredPositiveInteger(cliOptions, 'ftp-port');
+const POLL_INTERVAL = getRequiredPositiveInteger(cliOptions, 'poll-interval');
+const PAGE_SIZE = getRequiredPositiveInteger(cliOptions, 'page-size');
+const FTP_ROOT_DIR = path.resolve(getRequiredString(cliOptions, 'ftp-root'));
 
 const verboseLog = createVerboseLogger('ftp');
-
-function parseArgs(argv) {
-  const options = {
-    crmHost: 'localhost',
-    crmPort: 3000,
-    ftpPort: DEFAULT_FTP_PORT,
-    pollInterval: DEFAULT_POLL_INTERVAL
-  };
-
-  for (let i = 2; i < argv.length; i += 1) {
-    const arg = argv[i];
-    if (!arg.startsWith('--')) {
-      continue;
-    }
-
-    const key = arg.slice(2);
-    const value = argv[i + 1];
-
-    switch (key) {
-      case 'crm-host':
-        if (value) {
-          options.crmHost = value;
-          i += 1;
-        }
-        break;
-      case 'crm-port': {
-        const port = Number(value);
-        if (Number.isInteger(port) && port > 0) {
-          options.crmPort = port;
-          i += 1;
-        } else {
-          throw new Error('El puerto del CRM debe ser un número entero positivo');
-        }
-        break;
-      }
-      case 'ftp-port': {
-        const port = Number(value);
-        if (Number.isInteger(port) && port > 0) {
-          options.ftpPort = port;
-          i += 1;
-        } else {
-          throw new Error('El puerto del FTP debe ser un número entero positivo');
-        }
-        break;
-      }
-      case 'poll-interval': {
-        const interval = Number(value);
-        if (Number.isInteger(interval) && interval > 0) {
-          options.pollInterval = interval;
-          i += 1;
-        } else {
-          throw new Error('El intervalo de consulta debe ser un número entero positivo');
-        }
-        break;
-      }
-      default:
-        throw new Error(`Argumento no reconocido: --${key}`);
-    }
-  }
-
-  return options;
-}
 
 async function fetchContracts({ host, port, pageSize }) {
   const contracts = [];
@@ -157,16 +103,11 @@ function registerExitCleanup(directory) {
 }
 
 async function main() {
-  let options;
-  try {
-    options = parseArgs(process.argv);
-  } catch (error) {
-    console.error(error.message);
-    process.exit(1);
-  }
-
-  const { crmHost, crmPort, ftpPort, pollInterval } = options;
-  const ftpRootDir = DEFAULT_FTP_ROOT;
+  const crmHost = CRM_HOST;
+  const crmPort = CRM_PORT;
+  const ftpPort = FTP_PORT;
+  const pollInterval = POLL_INTERVAL;
+  const ftpRootDir = FTP_ROOT_DIR;
 
   try {
     await mkdir(ftpRootDir, { recursive: true });
@@ -256,7 +197,7 @@ async function main() {
 
     let contracts;
     try {
-      contracts = await fetchContracts({ host: crmHost, port: crmPort, pageSize: DEFAULT_PAGE_SIZE });
+      contracts = await fetchContracts({ host: crmHost, port: crmPort, pageSize: PAGE_SIZE });
     } catch (error) {
       console.error('Error al obtener contratos:', error.message);
       return;

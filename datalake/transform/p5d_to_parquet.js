@@ -2,10 +2,6 @@ const fsp = require('fs/promises');
 const path = require('path');
 const { ParquetSchema, ParquetWriter } = require('@dsnp/parquetjs');
 
-const DEFAULT_INTERVAL_MS = 180_000;
-const DEFAULT_INPUT_DIR = path.resolve(__dirname, '..', 'data', 'landing', 'ftp');
-const DEFAULT_OUTPUT_DIR = path.resolve(__dirname, '..', 'data', 'silver', 'p5d');
-const DEFAULT_OUTPUT_FILE = path.join(DEFAULT_OUTPUT_DIR, 'p5d_readings.parquet');
 const STATE_FILE = path.resolve(__dirname, '.p5d_transform_state.json');
 
 const isVerbose = process.env.TE_VERBOSE === 'true';
@@ -15,53 +11,14 @@ const verboseInfo = (...args) => {
   }
 };
 
-function parseCliArgs(argv) {
-  const options = {
-    inputDir: DEFAULT_INPUT_DIR,
-    outputFile: DEFAULT_OUTPUT_FILE,
-    intervalMs: DEFAULT_INTERVAL_MS
-  };
+const { parseArgs, getRequiredString, getRequiredPositiveInteger } = require('../../lib/cli');
 
-  for (let i = 2; i < argv.length; i += 1) {
-    const arg = argv[i];
-    if (!arg.startsWith('--')) {
-      continue;
-    }
-
-    const key = arg.slice(2);
-    const value = argv[i + 1];
-
-    switch (key) {
-      case 'input':
-        if (!value) {
-          throw new Error('El argumento --input requiere una ruta.');
-        }
-        options.inputDir = path.resolve(process.cwd(), value);
-        i += 1;
-        break;
-      case 'output':
-        if (!value) {
-          throw new Error('El argumento --output requiere una ruta.');
-        }
-        options.outputFile = path.resolve(process.cwd(), value);
-        i += 1;
-        break;
-      case 'interval-ms': {
-        const parsed = Number(value);
-        if (!Number.isFinite(parsed) || parsed <= 0) {
-          throw new Error('El argumento --interval-ms debe ser un número positivo.');
-        }
-        options.intervalMs = parsed;
-        i += 1;
-        break;
-      }
-      default:
-        throw new Error(`Argumento no reconocido: --${key}`);
-    }
-  }
-
-  return options;
-}
+const cliOptions = parseArgs(process.argv);
+const options = {
+  inputDir: path.resolve(getRequiredString(cliOptions, 'input')),
+  outputFile: path.resolve(getRequiredString(cliOptions, 'output')),
+  intervalMs: getRequiredPositiveInteger(cliOptions, 'interval-ms')
+};
 
 async function ensureDirectory(directoryPath) {
   await fsp.mkdir(directoryPath, { recursive: true });
@@ -220,13 +177,6 @@ let intervalHandle = null;
 let shuttingDown = false;
 
 async function main() {
-  let options;
-  try {
-    options = parseCliArgs(process.argv);
-  } catch (error) {
-    throw error;
-  }
-
   setupSignalHandlers(options);
 
   const schema = buildSchema();

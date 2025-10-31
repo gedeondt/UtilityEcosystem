@@ -2,24 +2,6 @@ const fsp = require('fs/promises');
 const path = require('path');
 const duckdb = require('duckdb');
 
-const DEFAULT_INTERVAL_MS = 180_000;
-const DEFAULT_INPUT_FILE = path.resolve(
-  __dirname,
-  '..',
-  'data',
-  'silver',
-  'p5d',
-  'p5d_readings.parquet'
-);
-const DEFAULT_OUTPUT_FILE = path.resolve(
-  __dirname,
-  '..',
-  'data',
-  'gold',
-  'controlcenter',
-  'hourly_average_consumption.json'
-);
-
 const isVerbose = process.env.TE_VERBOSE === 'true';
 const verboseInfo = (...args) => {
   if (isVerbose) {
@@ -27,57 +9,20 @@ const verboseInfo = (...args) => {
   }
 };
 
-function parseCliArgs(argv) {
-  const options = {
-    inputFile: DEFAULT_INPUT_FILE,
-    outputFile: DEFAULT_OUTPUT_FILE,
-    intervalMs: DEFAULT_INTERVAL_MS,
-    runOnce: false
-  };
+const {
+  parseArgs,
+  getRequiredString,
+  getRequiredPositiveInteger,
+  hasFlag
+} = require('../../lib/cli');
 
-  for (let i = 2; i < argv.length; i += 1) {
-    const arg = argv[i];
-    if (!arg.startsWith('--')) {
-      continue;
-    }
-
-    const key = arg.slice(2);
-    const value = argv[i + 1];
-
-    switch (key) {
-      case 'input':
-        if (!value) {
-          throw new Error('El argumento --input requiere una ruta.');
-        }
-        options.inputFile = path.resolve(process.cwd(), value);
-        i += 1;
-        break;
-      case 'output':
-        if (!value) {
-          throw new Error('El argumento --output requiere una ruta.');
-        }
-        options.outputFile = path.resolve(process.cwd(), value);
-        i += 1;
-        break;
-      case 'interval-ms': {
-        const parsed = Number(value);
-        if (!Number.isFinite(parsed) || parsed <= 0) {
-          throw new Error('El argumento --interval-ms debe ser un número positivo.');
-        }
-        options.intervalMs = parsed;
-        i += 1;
-        break;
-      }
-      case 'once':
-        options.runOnce = true;
-        break;
-      default:
-        throw new Error(`Argumento no reconocido: --${key}`);
-    }
-  }
-
-  return options;
-}
+const cliOptions = parseArgs(process.argv);
+const options = {
+  inputFile: path.resolve(getRequiredString(cliOptions, 'input')),
+  outputFile: path.resolve(getRequiredString(cliOptions, 'output')),
+  intervalMs: getRequiredPositiveInteger(cliOptions, 'interval-ms'),
+  runOnce: hasFlag(cliOptions, 'once')
+};
 
 async function ensureDirectory(directoryPath) {
   await fsp.mkdir(directoryPath, { recursive: true });
@@ -292,7 +237,6 @@ function setupSignalHandlers() {
 }
 
 async function main() {
-  const options = parseCliArgs(process.argv);
   setupSignalHandlers();
 
   verboseInfo(`Fichero de entrada (Silver): ${options.inputFile}`);

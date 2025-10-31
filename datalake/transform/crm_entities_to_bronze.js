@@ -1,21 +1,16 @@
 const fs = require('fs');
 const path = require('path');
 
-const DEFAULT_INTERVAL_MS = 5 * 60 * 1000;
-const DEFAULT_OUTPUT_DIR = path.join(__dirname, '..', 'data', 'bronce', 'crm');
+const {
+  parseArgs,
+  getRequiredString,
+  getRequiredPositiveInteger
+} = require('../../lib/cli');
 
-const landingRoot = path.resolve(
-  process.env.CRM_LANDING_DIR || process.argv[2] || path.join(__dirname, '..', 'data', 'landing', 'crm')
-);
-const outputDir = path.resolve(
-  process.env.CRM_BRONZE_OUTPUT_DIR || process.argv[3] || DEFAULT_OUTPUT_DIR
-);
-const intervalMs = Number(process.env.CRM_BRONZE_INTERVAL_MS || process.argv[4] || DEFAULT_INTERVAL_MS);
-
-if (!Number.isFinite(intervalMs) || intervalMs <= 0) {
-  console.error('Interval must be a positive number of milliseconds.');
-  process.exit(1);
-}
+const cliOptions = parseArgs(process.argv);
+const landingRoot = path.resolve(getRequiredString(cliOptions, 'landing-dir'));
+const outputDir = path.resolve(getRequiredString(cliOptions, 'output-dir'));
+const intervalMs = getRequiredPositiveInteger(cliOptions, 'interval-ms');
 
 const verbose = process.env.TE_VERBOSE === 'true';
 const verboseLog = (...args) => {

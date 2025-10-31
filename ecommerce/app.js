@@ -5,24 +5,19 @@ const { randomUUID } = require('crypto');
 const { createVerboseLogger } = require('../lib/logger');
 const { slugify } = require('../lib/strings');
 const { createJsonRequester } = require('../lib/http');
+const {
+  parseArgs,
+  getRequiredString,
+  getRequiredPositiveInteger,
+  getRequiredPositiveIntegerOrNull
+} = require('../lib/cli');
 
-const EVENTLOG_ENDPOINT = process.env.EVENTLOG_ENDPOINT || 'http://localhost:3050/events';
-const CHANNEL = process.env.ECOMMERCE_CHANNEL || 'ecommerce';
-const EMIT_INTERVAL_MS = (() => {
-  const envValue = Number(process.env.ECOMMERCE_INTERVAL_MS);
-  if (Number.isFinite(envValue) && envValue > 0) {
-    return Math.floor(envValue);
-  }
-  return 10_000;
-})();
-const ORDERS_PER_INTERVAL = (() => {
-  const arg = Number(process.argv[2]);
-  return Number.isFinite(arg) && arg > 0 ? Math.floor(arg) : 1;
-})();
-const MAX_ORDERS = (() => {
-  const arg = Number(process.argv[3]);
-  return Number.isFinite(arg) && arg > 0 ? Math.floor(arg) : null;
-})();
+const cliOptions = parseArgs(process.argv);
+const EVENTLOG_ENDPOINT = getRequiredString(cliOptions, 'eventlog-endpoint');
+const CHANNEL = getRequiredString(cliOptions, 'channel');
+const EMIT_INTERVAL_MS = getRequiredPositiveInteger(cliOptions, 'interval-ms');
+const ORDERS_PER_INTERVAL = getRequiredPositiveInteger(cliOptions, 'orders-per-interval');
+const MAX_ORDERS = getRequiredPositiveIntegerOrNull(cliOptions, 'max-orders');
 const eventlogUrl = new URL(EVENTLOG_ENDPOINT);
 const httpClient = eventlogUrl.protocol === 'https:' ? https : http;
 const requestEventlogJson = createJsonRequester(httpClient);
